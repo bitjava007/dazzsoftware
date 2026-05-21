@@ -3,23 +3,29 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { RapportsContent } from "./rapports-content";
 
-async function getReportData() {
+async function getReportData(startDate?: string, endDate?: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
   const now = new Date();
-  const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+  const hasRange = !!(startDate || endDate);
+  const rangeStart = startDate ? new Date(startDate) : new Date(now.getFullYear() - 1, now.getMonth(), 1);
+  const rangeEnd = endDate ? new Date(endDate + "T23:59:59") : now;
 
   const [stats, topClients, topArticles, expensesByCategory] = await Promise.all([
-    getDashboardStats(),
+    getDashboardStats(startDate, endDate),
     prisma.client.findMany({
       where: { deletedAt: null },
       select: {
         id: true,
         fullName: true,
         orders: {
-          where: { deletedAt: null, currentStatus: { notIn: ["annulee"] } },
+          where: {
+            deletedAt: null,
+            currentStatus: { notIn: ["annulee"] },
+            ...(hasRange ? { orderDate: { gte: rangeStart, lte: rangeEnd } } : {}),
+          },
           select: { sellingPrice: true },
         },
       },
@@ -27,7 +33,12 @@ async function getReportData() {
     }),
     prisma.orderLine.groupBy({
       by: ["articleId"],
-      where: { order: { deletedAt: null } },
+      where: {
+        order: {
+          deletedAt: null,
+          ...(hasRange ? { orderDate: { gte: rangeStart, lte: rangeEnd } } : {}),
+        },
+      },
       _count: { id: true },
       _sum: { lineTotal: true },
       orderBy: { _sum: { lineTotal: "desc" } },
@@ -35,7 +46,10 @@ async function getReportData() {
     }),
     prisma.expense.groupBy({
       by: ["categoryId"],
-      where: { deletedAt: null, expenseDate: { gte: twelveMonthsAgo } },
+      where: {
+        deletedAt: null,
+        expenseDate: { gte: rangeStart, lte: rangeEnd },
+      },
       _sum: { amountOriginal: true },
       _count: { id: true },
     }),
@@ -84,23 +98,23 @@ async function getReportData() {
     .filter((e) => e.total > 0)
     .sort((a, b) => b.total - a.total);
 
-  return {
-    stats,
-    topClients: topClientsData,
-    topArticles: topArticlesData,
-    expensesByCategory: expensesByCategoryData,
-  };
+  return { stats, topClients: topClientsData, topArticles: topArticlesData, expensesByCategory: expensesByCategoryData };
 }
 
-export default async function RapportsPage() {
-  const data = await getReportData();
+export default async function RapportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ start?: string; end?: string }>;
+}) {
+  const params = await searchParams;
+  const data = await getReportData(params.start, params.end);
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Rapports</h1>
         <p className="text-sm text-gray-500 mt-1">Analyses et exportations de données</p>
       </div>
-      <RapportsContent data={data} />
+      <RapportsContent data={data} defaultStart={params.start ?? ""} defaultEnd={params.end ?? ""} />
     </div>
   );
 }

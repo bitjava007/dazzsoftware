@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -36,9 +39,32 @@ const STATUS_COLORS = [
 interface DashboardContentProps {
   stats: Awaited<ReturnType<typeof import("@/actions/dashboard").getDashboardStats>>;
   currencies: Awaited<ReturnType<typeof import("@/actions/dashboard").getCurrencies>>;
+  defaultStart?: string;
+  defaultEnd?: string;
 }
 
-export function DashboardContent({ stats, currencies }: DashboardContentProps) {
+export function DashboardContent({ stats, currencies, defaultStart = "", defaultEnd = "" }: DashboardContentProps) {
+  const router = useRouter();
+  const [startDate, setStartDate] = useState(defaultStart);
+  const [endDate, setEndDate] = useState(defaultEnd);
+
+  const handleApply = () => {
+    const params = new URLSearchParams();
+    if (startDate) params.set("start", startDate);
+    if (endDate) params.set("end", endDate);
+    const qs = params.toString();
+    router.push(`/dashboard${qs ? `?${qs}` : ""}`);
+  };
+
+  const handleReset = () => {
+    setStartDate("");
+    setEndDate("");
+    router.push("/dashboard");
+  };
+
+  const isFiltered = !!(defaultStart || defaultEnd);
+  const periodLabel = isFiltered ? "sur la période" : "du mois";
+
   if (!stats) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -75,17 +101,17 @@ export function DashboardContent({ stats, currencies }: DashboardContentProps) {
       icon: Users,
       color: "text-purple-600",
       bg: "bg-purple-50",
-      sub: `+${stats.nouveauxClients} ce mois`,
+      sub: `+${stats.nouveauxClients} ${periodLabel}`,
     },
     {
-      title: "Ventes du mois",
+      title: `Ventes ${periodLabel}`,
       value: formatCurrency(stats.ventesDuMois),
       icon: TrendingUp,
       color: "text-emerald-600",
       bg: "bg-emerald-50",
     },
     {
-      title: "Dépenses du mois",
+      title: `Dépenses ${periodLabel}`,
       value: formatCurrency(stats.depensesDuMois),
       icon: TrendingDown,
       color: "text-orange-600",
@@ -115,6 +141,18 @@ export function DashboardContent({ stats, currencies }: DashboardContentProps) {
 
   return (
     <div className="space-y-6">
+      {/* Date Range Filter */}
+      <div className="flex justify-end">
+        <DateRangeFilter
+          startDate={startDate}
+          endDate={endDate}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+          onApply={handleApply}
+          onReset={handleReset}
+        />
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {kpiCards.map((card, i) => {
@@ -142,10 +180,11 @@ export function DashboardContent({ stats, currencies }: DashboardContentProps) {
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Monthly Trend */}
         <Card className="lg:col-span-2 border-0 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Évolution financière (6 mois)</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              Évolution financière {isFiltered ? "(période sélectionnée)" : "(6 mois)"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={280}>
@@ -166,10 +205,11 @@ export function DashboardContent({ stats, currencies }: DashboardContentProps) {
           </CardContent>
         </Card>
 
-        {/* Status Pie */}
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Commandes par statut</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              Commandes par statut {isFiltered ? "(période)" : ""}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {pieData.length > 0 ? (
@@ -189,11 +229,7 @@ export function DashboardContent({ stats, currencies }: DashboardContentProps) {
                     ))}
                   </Pie>
                   <Tooltip />
-                  <Legend
-                    formatter={(value) => (
-                      <span style={{ fontSize: "11px" }}>{value}</span>
-                    )}
-                  />
+                  <Legend formatter={(value) => <span style={{ fontSize: "11px" }}>{value}</span>} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
