@@ -69,6 +69,8 @@ export async function GET(
 
   if (!payment) return NextResponse.json({ error: "Paiement introuvable" }, { status: 404 });
 
+  try {
+
   const order = payment.order;
   const client = order.client;
   const currency = payment.currency;
@@ -258,4 +260,8 @@ export async function GET(
       "Cache-Control": "no-store",
     },
   });
+  } catch (err) {
+    console.error("[receipt/route] PDF generation error:", err);
+    return NextResponse.json({ error: "Erreur lors de la génération du reçu" }, { status: 500 });
+  }
 }

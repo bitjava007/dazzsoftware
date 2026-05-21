@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
-import { ArrowLeft, User, Calendar, CreditCard, Receipt, Edit2, Package } from "lucide-react";
+import { ArrowLeft, User, Calendar, CreditCard, Receipt, Edit2, Package, FileText } from "lucide-react";
 import { OrderStatusChanger } from "./order-status-changer";
+import { InvoiceButton } from "./invoice-button";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   brouillon: { label: "Brouillon", color: "bg-gray-100 text-gray-700" },
@@ -59,6 +60,13 @@ export default async function CommandeDetailPage({ params }: { params: Promise<{
           <Button variant="outline" size="sm" asChild>
             <Link href={`/commandes/${id}/modifier`}><Edit2 className="w-4 h-4 mr-1" />Modifier</Link>
           </Button>
+          <InvoiceButton
+            orderId={id}
+            clientId={order.client.id}
+            currencyId={order.currencyId}
+            hasInvoice={order.invoices.length > 0 || (order.invoiceItems?.length ?? 0) > 0}
+            existingInvoiceId={order.invoices[0]?.id ?? order.invoiceItems?.[0]?.invoiceId}
+          />
           <OrderStatusChanger orderId={id} currentStatus={order.currentStatus} />
         </div>
       </div>

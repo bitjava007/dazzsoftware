@@ -127,6 +127,7 @@ model Client {
 
   measurements Measurement[]
   orders       Order[]
+  invoices     Invoice[]
 
   @@map("clients")
 }
@@ -325,6 +326,7 @@ model Order {
   expenses      Expense[]
   payments      OrderPayment[]
   invoices      Invoice[]
+  invoiceItems  InvoiceItem[]
 
   @@map("orders")
 }
@@ -476,14 +478,19 @@ enum OrderPaymentType {
 model Invoice {
   id               String        @id @default(uuid())
   invoiceNumber    String        @unique @map("invoice_number")
-  orderId          String        @map("order_id")
+  clientId         String        @map("client_id")
+  orderId          String?       @map("order_id")
   issueDate        DateTime      @map("issue_date")
   dueDate          DateTime?     @map("due_date")
+  subtotal         Decimal       @default(0) @map("subtotal") @db.Decimal(12, 2)
+  discount         Decimal       @default(0) @map("discount") @db.Decimal(12, 2)
+  bonus            Decimal       @default(0) @map("bonus") @db.Decimal(12, 2)
   totalAmount      Decimal       @map("total_amount") @db.Decimal(12, 2)
   currencyId       String        @map("currency_id")
   exchangeRateUsed Decimal?      @map("exchange_rate_used") @db.Decimal(18, 8)
   amountPaid       Decimal       @default(0) @map("amount_paid") @db.Decimal(12, 2)
   balanceDue       Decimal       @map("balance_due") @db.Decimal(12, 2)
+  notes            String?
   pdfPath          String?       @map("pdf_path")
   status           InvoiceStatus @default(draft)
   createdById      String?       @map("created_by")
@@ -493,13 +500,28 @@ model Invoice {
   updatedAt        DateTime      @updatedAt @map("updated_at")
   deletedAt        DateTime?     @map("deleted_at")
 
-  order     Order    @relation(fields: [orderId], references: [id])
-  currency  Currency @relation(fields: [currencyId], references: [id])
-  createdBy Profile? @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
-  updatedBy Profile? @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id])
-  deletedBy Profile? @relation("InvoiceDeletedBy", fields: [deletedById], references: [id])
+  client    Client       @relation(fields: [clientId], references: [id])
+  order     Order?       @relation(fields: [orderId], references: [id])
+  currency  Currency     @relation(fields: [currencyId], references: [id])
+  items     InvoiceItem[]
+  createdBy Profile?     @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  updatedBy Profile?     @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy Profile?     @relation("InvoiceDeletedBy", fields: [deletedById], references: [id])
 
   @@map("invoices")
+}
+
+model InvoiceItem {
+  id        String   @id @default(uuid())
+  invoiceId String   @map("invoice_id")
+  orderId   String   @map("order_id")
+  amount    Decimal  @map("amount") @db.Decimal(12, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  order   Order   @relation(fields: [orderId], references: [id])
+
+  @@map("invoice_items")
 }
 
 enum InvoiceStatus {
