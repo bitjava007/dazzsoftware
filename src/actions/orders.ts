@@ -357,6 +357,10 @@ export async function getOrderById(id: string) {
         orderBy: { expenseDate: "desc" },
       },
       invoices: { where: { deletedAt: null } },
+      invoiceItems: {
+        where: { invoice: { deletedAt: null, status: { not: "cancelled" } } },
+        select: { id: true, invoiceId: true },
+      },
     },
   });
 }

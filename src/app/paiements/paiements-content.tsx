@@ -224,61 +224,39 @@ export function PaiementsContent({ payments, orders, currencies }: {
     window.open(`/api/payments/${id}/receipt`, "_blank");
   };
 
-  const handleDownload = async (id: string, receiptNumber: string) => {
-    try {
-      setPdfLoading(id);
-      const res = await fetch(`/api/payments/${id}/receipt`);
-      if (!res.ok) throw new Error();
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${receiptNumber}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de télécharger le reçu", variant: "destructive" });
-    } finally {
-      setPdfLoading(null);
-    }
+  const handleDownload = (id: string, receiptNumber: string) => {
+    const a = document.createElement("a");
+    a.style.display = "none";
+    a.href = `/api/payments/${id}/receipt`;
+    a.download = `${receiptNumber}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
-  const handlePrint = async (id: string) => {
-    try {
-      setPdfLoading(id);
-      const res = await fetch(`/api/payments/${id}/receipt`);
-      if (!res.ok) throw new Error();
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const win = window.open(url);
-      if (win) {
-        win.onload = () => {
-          win.print();
-          setTimeout(() => URL.revokeObjectURL(url), 2000);
-        };
-      }
-    } catch {
-      toast({ title: "Erreur", description: "Impossible d'imprimer le reçu", variant: "destructive" });
-    } finally {
-      setPdfLoading(null);
+  const handlePrint = (id: string) => {
+    const win = window.open(`/api/payments/${id}/receipt`, "_blank");
+    if (win) {
+      win.addEventListener("load", () => win.print());
     }
   };
 
   const handleShare = async (id: string, receiptNumber: string) => {
-    if (typeof navigator.share === "function") {
-      try {
-        setPdfLoading(id);
-        const res = await fetch(`/api/payments/${id}/receipt`);
-        const blob = await res.blob();
-        const file = new File([blob], `${receiptNumber}.pdf`, { type: "application/pdf" });
+    try {
+      setPdfLoading(id);
+      const res = await fetch(`/api/payments/${id}/receipt`);
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const file = new File([blob], `${receiptNumber}.pdf`, { type: "application/pdf" });
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: `Reçu ${receiptNumber}` });
-      } catch {
+      } else {
         handleDownload(id, receiptNumber);
-      } finally {
-        setPdfLoading(null);
       }
-    } else {
+    } catch {
       handleDownload(id, receiptNumber);
+    } finally {
+      setPdfLoading(null);
     }
   };
 
