@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Ruler, ShoppingBag, ClipboardList,
   Receipt, CreditCard, FileText, BarChart3, Settings, LogOut, Scissors,
-  UserCheck,
+  UserCheck, ArrowLeftRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -22,6 +22,7 @@ const navItems = [
   { href: "/paiements", icon: CreditCard, key: "paiements" },
   { href: "/factures", icon: FileText, key: "factures" },
   { href: "/rapports", icon: BarChart3, key: "rapports" },
+  { href: "/taux-de-change", icon: ArrowLeftRight, key: "taux_de_change" },
   { href: "/utilisateurs", icon: UserCheck, key: "utilisateurs" },
   { href: "/parametres", icon: Settings, key: "parametres" },
 ];

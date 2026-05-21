@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { createOrderAction } from "@/actions/orders";
+import { updateOrderAction } from "@/actions/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,32 +25,71 @@ interface OrderLine {
   unitPrice: number;
 }
 
-export default function NouvelleCommandePage() {
+interface OrderData {
+  id: string;
+  orderNumber: string;
+  clientId: string;
+  currencyId: string;
+  orderDate: string | null;
+  expectedDeliveryDate: string | null;
+  orderDetails: string | null;
+  discount: number;
+  bonus: number;
+  lines: { articleId: string | null; description: string | null; quantity: number; unitPrice: number }[];
+}
+
+export default function ModifierCommandePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const params = useParams<{ id: string }>();
+  const id = params.id;
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
   const [clients, setClients] = useState<Client[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
-  const [clientId, setClientId] = useState(searchParams.get("clientId") ?? "");
+  const [clientId, setClientId] = useState("");
   const [currencyId, setCurrencyId] = useState("");
   const [lines, setLines] = useState<OrderLine[]>([{ articleId: "", description: "", quantity: 1, unitPrice: 0 }]);
   const [discount, setDiscount] = useState(0);
   const [bonus, setBonus] = useState(0);
+  const [orderDate, setOrderDate] = useState("");
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("");
+  const [orderDetails, setOrderDetails] = useState("");
+  const [orderNumber, setOrderNumber] = useState("");
 
   useEffect(() => {
     Promise.all([
       fetch("/api/data/clients").then((r) => r.json()),
       fetch("/api/data/articles").then((r) => r.json()),
       fetch("/api/data/currencies").then((r) => r.json()),
-    ]).then(([c, a, cu]) => {
+      fetch(`/api/data/orders/${id}`).then((r) => r.json()),
+    ]).then(([c, a, cu, order]: [Client[], Article[], Currency[], OrderData]) => {
       setClients(c);
       setArticles(a);
       setCurrencies(cu);
-      if (cu.length > 0) setCurrencyId(cu[0].id);
-    }).catch(console.error);
-  }, []);
+      setClientId(order.clientId);
+      setCurrencyId(order.currencyId);
+      setDiscount(order.discount ?? 0);
+      setBonus(order.bonus ?? 0);
+      setOrderDate(order.orderDate ? order.orderDate.split("T")[0] : "");
+      setExpectedDeliveryDate(order.expectedDeliveryDate ? order.expectedDeliveryDate.split("T")[0] : "");
+      setOrderDetails(order.orderDetails ?? "");
+      setOrderNumber(order.orderNumber);
+      if (order.lines.length > 0) {
+        setLines(order.lines.map((l) => ({
+          articleId: l.articleId ?? "",
+          description: l.description ?? "",
+          quantity: l.quantity,
+          unitPrice: Number(l.unitPrice),
+        })));
+      }
+      setIsFetching(false);
+    }).catch(() => {
+      toast({ title: "Erreur", description: "Impossible de charger les données", variant: "destructive" });
+      setIsFetching(false);
+    });
+  }, [id, toast]);
 
   const addLine = () => setLines([...lines, { articleId: "", description: "", quantity: 1, unitPrice: 0 }]);
   const removeLine = (i: number) => setLines(lines.filter((_, idx) => idx !== i));
@@ -87,24 +126,32 @@ export default function NouvelleCommandePage() {
     formData.set("bonus", String(bonus));
     formData.set("lines", JSON.stringify(lines));
 
-    const result = await createOrderAction(formData);
+    const result = await updateOrderAction(id, formData);
     setIsLoading(false);
 
     if (result.error) {
       toast({ title: "Erreur", description: result.error, variant: "destructive" });
     } else {
-      toast({ title: "Commande créée avec succès" });
-      router.push(`/commandes/${result.order?.id}`);
+      toast({ title: "Commande modifiée avec succès" });
+      router.push(`/commandes/${id}`);
     }
   };
+
+  if (isFetching) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/commandes"><ArrowLeft className="w-4 h-4 mr-1" />Retour</Link>
+          <Link href={`/commandes/${id}`}><ArrowLeft className="w-4 h-4 mr-1" />Retour</Link>
         </Button>
-        <h1 className="text-xl sm:text-2xl font-bold">Nouvelle commande</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">Modifier commande {orderNumber}</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -133,16 +180,35 @@ export default function NouvelleCommandePage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="orderDate">Date de commande</Label>
-                <Input id="orderDate" name="orderDate" type="date" defaultValue={new Date().toISOString().split("T")[0]} />
+                <Input
+                  id="orderDate"
+                  name="orderDate"
+                  type="date"
+                  value={orderDate}
+                  onChange={(e) => setOrderDate(e.target.value)}
+                />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="expectedDeliveryDate">Date de livraison prévue</Label>
-                <Input id="expectedDeliveryDate" name="expectedDeliveryDate" type="date" />
+                <Input
+                  id="expectedDeliveryDate"
+                  name="expectedDeliveryDate"
+                  type="date"
+                  value={expectedDeliveryDate}
+                  onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+                />
               </div>
             </div>
             <div className="space-y-1">
               <Label htmlFor="orderDetails">Détails / Description</Label>
-              <Textarea id="orderDetails" name="orderDetails" rows={3} placeholder="Tissu, couleurs, modèle..." />
+              <Textarea
+                id="orderDetails"
+                name="orderDetails"
+                rows={3}
+                value={orderDetails}
+                onChange={(e) => setOrderDetails(e.target.value)}
+                placeholder="Tissu, couleurs, modèle..."
+              />
             </div>
           </CardContent>
         </Card>
@@ -254,10 +320,10 @@ export default function NouvelleCommandePage() {
 
         <div className="flex gap-3">
           <Button type="submit" disabled={isLoading} className="bg-blue-600 hover:bg-blue-700">
-            {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Création...</> : "Créer la commande"}
+            {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Modification...</> : "Enregistrer les modifications"}
           </Button>
           <Button type="button" variant="outline" asChild>
-            <Link href="/commandes">Annuler</Link>
+            <Link href={`/commandes/${id}`}>Annuler</Link>
           </Button>
         </div>
       </form>
