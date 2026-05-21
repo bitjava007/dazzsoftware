@@ -1,0 +1,510 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Profiles ────────────────────────────────────────────────────────────────
+model Profile {
+  id        String   @id @default(uuid())
+  fullName  String   @map("full_name")
+  role      Role     @default(user_basic)
+  isActive  Boolean  @default(true) @map("is_active")
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  loginHistory  UserLoginHistory[]
+  clientsCreated Client[] @relation("ClientCreatedBy")
+  clientsUpdated Client[] @relation("ClientUpdatedBy")
+  clientsDeleted Client[] @relation("ClientDeletedBy")
+
+  measurementsCreated Measurement[] @relation("MeasurementCreatedBy")
+  measurementsUpdated Measurement[] @relation("MeasurementUpdatedBy")
+  measurementsDeleted Measurement[] @relation("MeasurementDeletedBy")
+
+  articlesCreated Article[] @relation("ArticleCreatedBy")
+  articlesUpdated Article[] @relation("ArticleUpdatedBy")
+  articlesDeleted Article[] @relation("ArticleDeletedBy")
+
+  ordersCreated Order[] @relation("OrderCreatedBy")
+  ordersUpdated Order[] @relation("OrderUpdatedBy")
+  ordersDeleted Order[] @relation("OrderDeletedBy")
+
+  orderStatusChanges OrderStatusHistory[]
+
+  expensesCreated Expense[] @relation("ExpenseCreatedBy")
+  expensesUpdated Expense[] @relation("ExpenseUpdatedBy")
+  expensesDeleted Expense[] @relation("ExpenseDeletedBy")
+
+  paymentsCreated OrderPayment[] @relation("PaymentCreatedBy")
+  paymentsUpdated OrderPayment[] @relation("PaymentUpdatedBy")
+  paymentsDeleted OrderPayment[] @relation("PaymentDeletedBy")
+
+  invoicesCreated Invoice[] @relation("InvoiceCreatedBy")
+  invoicesUpdated Invoice[] @relation("InvoiceUpdatedBy")
+  invoicesDeleted Invoice[] @relation("InvoiceDeletedBy")
+
+  exchangeRatesCreated ExchangeRate[] @relation("ExchangeRateCreatedBy")
+  exchangeRatesUpdated ExchangeRate[] @relation("ExchangeRateUpdatedBy")
+  exchangeRatesDeleted ExchangeRate[] @relation("ExchangeRateDeletedBy")
+
+  auditLogs AuditLog[]
+
+  @@map("profiles")
+}
+
+enum Role {
+  admin
+  manager
+  accountant
+  tailor
+  user_basic
+
+  @@map("role")
+}
+
+// ─── Login History ────────────────────────────────────────────────────────────
+model UserLoginHistory {
+  id                String      @id @default(uuid())
+  userId            String      @map("user_id")
+  loginAt           DateTime    @default(now()) @map("login_at")
+  logoutAt          DateTime?   @map("logout_at")
+  sessionDuration   Int?        @map("session_duration")
+  ipAddress         String?     @map("ip_address")
+  userAgent         String?     @map("user_agent")
+  deviceType        String?     @map("device_type")
+  browser           String?
+  operatingSystem   String?     @map("operating_system")
+  country           String?
+  city              String?
+  loginStatus       LoginStatus @default(success) @map("login_status")
+  failureReason     String?     @map("failure_reason")
+  sessionId         String?     @map("session_id")
+  rememberTokenUsed Boolean     @default(false) @map("remember_token_used")
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  profile Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_login_history")
+}
+
+enum LoginStatus {
+  success
+  failed
+  blocked
+
+  @@map("login_status")
+}
+
+// ─── Clients ──────────────────────────────────────────────────────────────────
+model Client {
+  id          String    @id @default(uuid())
+  fullName    String    @map("full_name")
+  phone       String?
+  email       String?
+  country     String?
+  city        String?
+  address     String?
+  notes       String?
+  createdById String?   @map("created_by")
+  updatedById String?   @map("updated_by")
+  deletedById String?   @map("deleted_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  createdBy Profile? @relation("ClientCreatedBy", fields: [createdById], references: [id])
+  updatedBy Profile? @relation("ClientUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy Profile? @relation("ClientDeletedBy", fields: [deletedById], references: [id])
+
+  measurements Measurement[]
+  orders       Order[]
+
+  @@map("clients")
+}
+
+// ─── Measurements ─────────────────────────────────────────────────────────────
+model Measurement {
+  id            String    @id @default(uuid())
+  clientId      String    @map("client_id")
+  profileName   String?   @map("profile_name")
+  chest         Decimal?  @db.Decimal(6, 2)
+  waist         Decimal?  @db.Decimal(6, 2)
+  hips          Decimal?  @db.Decimal(6, 2)
+  shoulders     Decimal?  @db.Decimal(6, 2)
+  armLength     Decimal?  @map("arm_length") @db.Decimal(6, 2)
+  neck          Decimal?  @db.Decimal(6, 2)
+  shirtLength   Decimal?  @map("shirt_length") @db.Decimal(6, 2)
+  trouserLength Decimal?  @map("trouser_length") @db.Decimal(6, 2)
+  dressLength   Decimal?  @map("dress_length") @db.Decimal(6, 2)
+  wrist         Decimal?  @db.Decimal(6, 2)
+  thigh         Decimal?  @db.Decimal(6, 2)
+  knee          Decimal?  @db.Decimal(6, 2)
+  ankle         Decimal?  @db.Decimal(6, 2)
+  inseam        Decimal?  @db.Decimal(6, 2)
+  notes         String?
+  referencePhoto String?  @map("reference_photo")
+  createdById   String?   @map("created_by")
+  updatedById   String?   @map("updated_by")
+  deletedById   String?   @map("deleted_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdBy Profile? @relation("MeasurementCreatedBy", fields: [createdById], references: [id])
+  updatedBy Profile? @relation("MeasurementUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy Profile? @relation("MeasurementDeletedBy", fields: [deletedById], references: [id])
+
+  orders Order[]
+
+  @@map("measurements")
+}
+
+// ─── Articles ─────────────────────────────────────────────────────────────────
+model Article {
+  id              String    @id @default(uuid())
+  name            String
+  description     String?
+  indicativePrice Decimal?  @map("indicative_price") @db.Decimal(12, 2)
+  createdById     String?   @map("created_by")
+  updatedById     String?   @map("updated_by")
+  deletedById     String?   @map("deleted_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  createdBy Profile? @relation("ArticleCreatedBy", fields: [createdById], references: [id])
+  updatedBy Profile? @relation("ArticleUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy Profile? @relation("ArticleDeletedBy", fields: [deletedById], references: [id])
+
+  orders Order[]
+
+  @@map("articles")
+}
+
+// ─── Currencies ───────────────────────────────────────────────────────────────
+model Currency {
+  id       String  @id @default(uuid())
+  code     String  @unique
+  name     String
+  symbol   String
+  isActive Boolean @default(true) @map("is_active")
+
+  exchangeRatesFrom ExchangeRate[] @relation("FromCurrency")
+  exchangeRatesTo   ExchangeRate[] @relation("ToCurrency")
+
+  orders        Order[]
+  expenses      Expense[]
+  orderPayments OrderPayment[]
+  invoices      Invoice[]
+  settings      Settings[]
+
+  @@map("currencies")
+}
+
+// ─── Exchange Rates ───────────────────────────────────────────────────────────
+model ExchangeRate {
+  id             String    @id @default(uuid())
+  fromCurrencyId String    @map("from_currency_id")
+  toCurrencyId   String    @map("to_currency_id")
+  rate           Decimal   @db.Decimal(18, 8)
+  effectiveDate  DateTime  @map("effective_date")
+  source         String?
+  isActive       Boolean   @default(true) @map("is_active")
+  notes          String?
+  createdById    String?   @map("created_by")
+  updatedById    String?   @map("updated_by")
+  deletedById    String?   @map("deleted_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  fromCurrency Currency @relation("FromCurrency", fields: [fromCurrencyId], references: [id])
+  toCurrency   Currency @relation("ToCurrency", fields: [toCurrencyId], references: [id])
+  createdBy    Profile? @relation("ExchangeRateCreatedBy", fields: [createdById], references: [id])
+  updatedBy    Profile? @relation("ExchangeRateUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy    Profile? @relation("ExchangeRateDeletedBy", fields: [deletedById], references: [id])
+
+  @@map("exchange_rates")
+}
+
+// ─── Expense Categories ───────────────────────────────────────────────────────
+model ExpenseCategory {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+
+  subcategories ExpenseSubcategory[]
+  expenses      Expense[]
+
+  @@map("expense_categories")
+}
+
+model ExpenseSubcategory {
+  id          String  @id @default(uuid())
+  categoryId  String  @map("category_id")
+  name        String
+  description String?
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@map("expense_subcategories")
+}
+
+// ─── Orders ───────────────────────────────────────────────────────────────────
+model Order {
+  id                   String      @id @default(uuid())
+  orderNumber          String      @unique @map("order_number")
+  clientId             String      @map("client_id")
+  articleId            String?     @map("article_id")
+  measurementId        String?     @map("measurement_id")
+  country              String?
+  city                 String?
+  orderDetails         String?     @map("order_details")
+  sellingPrice         Decimal     @map("selling_price") @db.Decimal(12, 2)
+  currencyId           String      @map("currency_id")
+  exchangeRateUsed     Decimal?    @map("exchange_rate_used") @db.Decimal(18, 8)
+  amountUsd            Decimal?    @map("amount_usd") @db.Decimal(12, 2)
+  amountXof            Decimal?    @map("amount_xof") @db.Decimal(12, 2)
+  orderDate            DateTime    @default(now()) @map("order_date")
+  expectedDeliveryDate DateTime?   @map("expected_delivery_date")
+  actualDeliveryDate   DateTime?   @map("actual_delivery_date")
+  currentStatus        OrderStatus @default(brouillon) @map("current_status")
+  createdById          String?     @map("created_by")
+  updatedById          String?     @map("updated_by")
+  deletedById          String?     @map("deleted_by")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+  deletedAt            DateTime?   @map("deleted_at")
+
+  client      Client       @relation(fields: [clientId], references: [id])
+  article     Article?     @relation(fields: [articleId], references: [id])
+  measurement Measurement? @relation(fields: [measurementId], references: [id])
+  currency    Currency     @relation(fields: [currencyId], references: [id])
+  createdBy   Profile?     @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  updatedBy   Profile?     @relation("OrderUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy   Profile?     @relation("OrderDeletedBy", fields: [deletedById], references: [id])
+
+  statusHistory OrderStatusHistory[]
+  expenses      Expense[]
+  payments      OrderPayment[]
+  invoices      Invoice[]
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  brouillon
+  confirmee
+  mesures_prises
+  tissu_achete
+  coupe
+  couture
+  essayage
+  retouches
+  finition
+  pret_livraison
+  livree
+  annulee
+
+  @@map("order_status")
+}
+
+// ─── Order Status History ─────────────────────────────────────────────────────
+model OrderStatusHistory {
+  id          String       @id @default(uuid())
+  orderId     String       @map("order_id")
+  oldStatus   OrderStatus? @map("old_status")
+  newStatus   OrderStatus  @map("new_status")
+  note        String?
+  changedById String?      @map("changed_by")
+  changedAt   DateTime     @default(now()) @map("changed_at")
+
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy Profile? @relation(fields: [changedById], references: [id])
+
+  @@map("order_status_history")
+}
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+model Expense {
+  id                String      @id @default(uuid())
+  expenseNumber     String      @unique @map("expense_number")
+  categoryId        String?     @map("category_id")
+  subcategoryId     String?     @map("subcategory_id")
+  orderId           String?     @map("order_id")
+  linkedToOrder     Boolean     @default(false) @map("linked_to_order")
+  expenseDate       DateTime    @map("expense_date")
+  beneficiary       String?
+  paymentType       PaymentType @map("payment_type")
+  amountOriginal    Decimal     @map("amount_original") @db.Decimal(12, 2)
+  currencyId        String      @map("currency_id")
+  exchangeRateUsed  Decimal?    @map("exchange_rate_used") @db.Decimal(18, 8)
+  amountUsd         Decimal?    @map("amount_usd") @db.Decimal(12, 2)
+  amountXof         Decimal?    @map("amount_xof") @db.Decimal(12, 2)
+  label             String?
+  details           String?
+  receiptAttachment String?     @map("receipt_attachment")
+  createdById       String?     @map("created_by")
+  updatedById       String?     @map("updated_by")
+  deletedById       String?     @map("deleted_by")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+  deletedAt         DateTime?   @map("deleted_at")
+
+  category    ExpenseCategory?    @relation(fields: [categoryId], references: [id])
+  subcategory ExpenseSubcategory? @relation(fields: [subcategoryId], references: [id])
+  order       Order?              @relation(fields: [orderId], references: [id])
+  currency    Currency            @relation(fields: [currencyId], references: [id])
+  createdBy   Profile?            @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  updatedBy   Profile?            @relation("ExpenseUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy   Profile?            @relation("ExpenseDeletedBy", fields: [deletedById], references: [id])
+
+  @@map("expenses")
+}
+
+enum PaymentType {
+  cash
+  mobile_money
+  bank_transfer
+  card
+
+  @@map("payment_type")
+}
+
+// ─── Order Payments ───────────────────────────────────────────────────────────
+model OrderPayment {
+  id               String           @id @default(uuid())
+  paymentNumber    String           @unique @map("payment_number")
+  receiptNumber    String           @unique @map("receipt_number")
+  orderId          String           @map("order_id")
+  paymentType      OrderPaymentType @map("payment_type")
+  amountOriginal   Decimal          @map("amount_original") @db.Decimal(12, 2)
+  currencyId       String           @map("currency_id")
+  exchangeRateUsed Decimal?         @map("exchange_rate_used") @db.Decimal(18, 8)
+  amountUsd        Decimal?         @map("amount_usd") @db.Decimal(12, 2)
+  amountXof        Decimal?         @map("amount_xof") @db.Decimal(12, 2)
+  paymentDate      DateTime         @map("payment_date")
+  paymentMethod    PaymentType      @map("payment_method")
+  paymentReference String?          @map("payment_reference")
+  label            String?
+  details          String?
+  createdById      String?          @map("created_by")
+  updatedById      String?          @map("updated_by")
+  deletedById      String?          @map("deleted_by")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  deletedAt        DateTime?        @map("deleted_at")
+
+  order     Order    @relation(fields: [orderId], references: [id])
+  currency  Currency @relation(fields: [currencyId], references: [id])
+  createdBy Profile? @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+  updatedBy Profile? @relation("PaymentUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy Profile? @relation("PaymentDeletedBy", fields: [deletedById], references: [id])
+
+  @@map("order_payments")
+}
+
+enum OrderPaymentType {
+  acompte_initial
+  acompte
+  paiement_final
+  remboursement
+  bonus
+  remise
+
+  @@map("order_payment_type")
+}
+
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+model Invoice {
+  id               String        @id @default(uuid())
+  invoiceNumber    String        @unique @map("invoice_number")
+  orderId          String        @map("order_id")
+  issueDate        DateTime      @map("issue_date")
+  dueDate          DateTime?     @map("due_date")
+  totalAmount      Decimal       @map("total_amount") @db.Decimal(12, 2)
+  currencyId       String        @map("currency_id")
+  exchangeRateUsed Decimal?      @map("exchange_rate_used") @db.Decimal(18, 8)
+  amountPaid       Decimal       @default(0) @map("amount_paid") @db.Decimal(12, 2)
+  balanceDue       Decimal       @map("balance_due") @db.Decimal(12, 2)
+  pdfPath          String?       @map("pdf_path")
+  status           InvoiceStatus @default(draft)
+  createdById      String?       @map("created_by")
+  updatedById      String?       @map("updated_by")
+  deletedById      String?       @map("deleted_by")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  deletedAt        DateTime?     @map("deleted_at")
+
+  order     Order    @relation(fields: [orderId], references: [id])
+  currency  Currency @relation(fields: [currencyId], references: [id])
+  createdBy Profile? @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  updatedBy Profile? @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy Profile? @relation("InvoiceDeletedBy", fields: [deletedById], references: [id])
+
+  @@map("invoices")
+}
+
+enum InvoiceStatus {
+  draft
+  issued
+  partially_paid
+  paid
+  cancelled
+
+  @@map("invoice_status")
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+model Settings {
+  id                String   @id @default(uuid())
+  companyName       String   @map("company_name")
+  logo              String?
+  address           String?
+  phone             String?
+  email             String?
+  taxNumber         String?  @map("tax_number")
+  defaultCurrencyId String?  @map("default_currency_id")
+  invoicePrefix     String   @default("FACT-") @map("invoice_prefix")
+  receiptPrefix     String   @default("RECU-") @map("receipt_prefix")
+  language          String   @default("fr")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  defaultCurrency Currency? @relation(fields: [defaultCurrencyId], references: [id])
+
+  @@map("settings")
+}
+
+// ─── Audit Logs ───────────────────────────────────────────────────────────────
+model AuditLog {
+  id         String      @id @default(uuid())
+  userId     String?     @map("user_id")
+  tableName  String      @map("table_name")
+  recordId   String      @map("record_id")
+  action     AuditAction
+  oldValues  Json?       @map("old_values")
+  newValues  Json?       @map("new_values")
+  ipAddress  String?     @map("ip_address")
+  userAgent  String?     @map("user_agent")
+  actionDate DateTime    @default(now()) @map("action_date")
+
+  user Profile? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  create
+  update
+  delete
+
+  @@map("audit_action")
+}
