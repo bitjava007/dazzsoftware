@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Plus, Edit2, Trash2, Loader2 } from "lucide-react";
+import { DateRangeFilter } from "@/components/ui/date-range-filter";
+import { Plus, Edit2, Trash2, Loader2, Search } from "lucide-react";
 
 const PAYMENT_TYPES = [
   { value: "acompte_initial", label: "Acompte initial" },
@@ -163,6 +164,10 @@ export function PaiementsContent({ payments, orders, currencies }: {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   const router = useRouter();
+  const [search, setSearch] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [methodFilter, setMethodFilter] = useState("all");
 
   const handleCreate = (formData: FormData, orderId: string, paymentType: string, paymentMethod: string, currencyId: string) => {
     formData.set("orderId", orderId);
@@ -212,7 +217,20 @@ export function PaiementsContent({ payments, orders, currencies }: {
     });
   };
 
-  const totalPaid = payments
+  const filtered = payments.filter((p) => {
+    const text = search.toLowerCase();
+    const matchText = !text ||
+      p.receiptNumber.toLowerCase().includes(text) ||
+      p.order.client.fullName.toLowerCase().includes(text) ||
+      p.order.orderNumber.toLowerCase().includes(text);
+    const matchMethod = methodFilter === "all" || p.paymentMethod === methodFilter;
+    const d = new Date(p.paymentDate);
+    const matchStart = !startDate || d >= new Date(startDate);
+    const matchEnd = !endDate || d <= new Date(endDate + "T23:59:59");
+    return matchText && matchMethod && matchStart && matchEnd;
+  });
+
+  const totalPaid = filtered
     .filter((p) => !["remboursement", "remise"].includes(p.paymentType))
     .reduce((sum, p) => sum + Number(p.amountOriginal), 0);
 
@@ -228,21 +246,22 @@ export function PaiementsContent({ payments, orders, currencies }: {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-5">
             <p className="text-sm text-gray-500">Nombre de paiements</p>
-            <p className="text-2xl font-bold mt-1">{payments.length}</p>
+            <p className="text-2xl font-bold mt-1">{filtered.length}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-5">
             <p className="text-sm text-gray-500">Paiements finaux</p>
-            <p className="text-2xl font-bold mt-1">{payments.filter((p) => p.paymentType === "paiement_final").length}</p>
+            <p className="text-2xl font-bold mt-1">{filtered.filter((p) => p.paymentType === "paiement_final").length}</p>
           </CardContent>
         </Card>
       </div>
 
       <Card className="border-0 shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Historique des paiements</CardTitle>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <CardHeader className="pb-3 border-b space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <CardTitle className="text-base">Historique des paiements</CardTitle>
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
                 <Plus className="w-4 h-4 mr-1" />Nouveau paiement
@@ -255,6 +274,27 @@ export function PaiementsContent({ payments, orders, currencies }: {
               <PaymentForm orders={orders} currencies={currencies} onSubmit={handleCreate} onCancel={() => setCreateOpen(false)} isPending={isPending} />
             </DialogContent>
           </Dialog>
+          </div>
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input placeholder="Rechercher..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 h-8 text-sm" />
+            </div>
+            <Select value={methodFilter} onValueChange={setMethodFilter}>
+              <SelectTrigger className="h-8 text-sm w-full sm:w-44">
+                <SelectValue placeholder="Toutes méthodes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes méthodes</SelectItem>
+                {PAYMENT_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <DateRangeFilter
+              startDate={startDate} endDate={endDate}
+              onStartDateChange={setStartDate} onEndDateChange={setEndDate}
+              onReset={() => { setStartDate(""); setEndDate(""); setMethodFilter("all"); setSearch(""); }}
+            />
+          </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
@@ -271,11 +311,11 @@ export function PaiementsContent({ payments, orders, currencies }: {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payments.length === 0 ? (
+              {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-gray-400">Aucun paiement</TableCell>
+                  <TableCell colSpan={8} className="text-center py-10 text-gray-400">Aucun paiement trouvé</TableCell>
                 </TableRow>
-              ) : payments.map((payment) => (
+              ) : filtered.map((payment) => (
                 <TableRow key={payment.id}>
                   <TableCell className="font-mono text-xs">{payment.receiptNumber}</TableCell>
                   <TableCell className="text-sm">{formatDate(payment.paymentDate)}</TableCell>

@@ -92,7 +92,8 @@ export async function getInvoices() {
     include: {
       order: {
         include: {
-          client: { select: { fullName: true } },
+          client: { select: { id: true, fullName: true } },
+          currency: true,
         },
       },
       currency: true,
