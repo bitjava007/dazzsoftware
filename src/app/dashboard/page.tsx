@@ -3,9 +3,17 @@ import { getDashboardStats, getCurrencies } from "@/actions/dashboard";
 import { DashboardContent } from "./dashboard-content";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ start?: string; end?: string }>;
+}) {
+  const params = await searchParams;
+  const start = params.start;
+  const end = params.end;
+
   const [stats, currencies] = await Promise.all([
-    getDashboardStats(),
+    getDashboardStats(start, end),
     getCurrencies(),
   ]);
 
@@ -19,9 +27,13 @@ export default async function DashboardPage() {
           </p>
         </div>
       </div>
-
       <Suspense fallback={<DashboardSkeleton />}>
-        <DashboardContent stats={stats} currencies={currencies} />
+        <DashboardContent
+          stats={stats}
+          currencies={currencies}
+          defaultStart={start ?? ""}
+          defaultEnd={end ?? ""}
+        />
       </Suspense>
     </div>
   );

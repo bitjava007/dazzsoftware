@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
-import { Plus, Edit2, Trash2, Loader2, Search } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, Edit2, Trash2, Loader2, Search, MoreHorizontal, Eye, Download, Printer, Share2 } from "lucide-react";
 
 const PAYMENT_TYPES = [
   { value: "acompte_initial", label: "Acompte initial" },
@@ -217,6 +218,70 @@ export function PaiementsContent({ payments, orders, currencies }: {
     });
   };
 
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
+
+  const handleView = (id: string) => {
+    window.open(`/api/payments/${id}/receipt`, "_blank");
+  };
+
+  const handleDownload = async (id: string, receiptNumber: string) => {
+    try {
+      setPdfLoading(id);
+      const res = await fetch(`/api/payments/${id}/receipt`);
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${receiptNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de télécharger le reçu", variant: "destructive" });
+    } finally {
+      setPdfLoading(null);
+    }
+  };
+
+  const handlePrint = async (id: string) => {
+    try {
+      setPdfLoading(id);
+      const res = await fetch(`/api/payments/${id}/receipt`);
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url);
+      if (win) {
+        win.onload = () => {
+          win.print();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+        };
+      }
+    } catch {
+      toast({ title: "Erreur", description: "Impossible d'imprimer le reçu", variant: "destructive" });
+    } finally {
+      setPdfLoading(null);
+    }
+  };
+
+  const handleShare = async (id: string, receiptNumber: string) => {
+    if (typeof navigator.share === "function") {
+      try {
+        setPdfLoading(id);
+        const res = await fetch(`/api/payments/${id}/receipt`);
+        const blob = await res.blob();
+        const file = new File([blob], `${receiptNumber}.pdf`, { type: "application/pdf" });
+        await navigator.share({ files: [file], title: `Reçu ${receiptNumber}` });
+      } catch {
+        handleDownload(id, receiptNumber);
+      } finally {
+        setPdfLoading(null);
+      }
+    } else {
+      handleDownload(id, receiptNumber);
+    }
+  };
+
   const filtered = payments.filter((p) => {
     const text = search.toLowerCase();
     const matchText = !text ||
@@ -337,9 +402,33 @@ export function PaiementsContent({ payments, orders, currencies }: {
                       <Button variant="ghost" size="sm" onClick={() => setEditingPayment(payment)}>
                         <Edit2 className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(payment.id)} disabled={isPending}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" disabled={pdfLoading === payment.id}>
+                            {pdfLoading === payment.id
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <MoreHorizontal className="w-4 h-4" />}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleView(payment.id)}>
+                            <Eye className="w-4 h-4 mr-2" />Voir reçu
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDownload(payment.id, payment.receiptNumber)}>
+                            <Download className="w-4 h-4 mr-2" />Télécharger PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handlePrint(payment.id)}>
+                            <Printer className="w-4 h-4 mr-2" />Imprimer
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleShare(payment.id, payment.receiptNumber)}>
+                            <Share2 className="w-4 h-4 mr-2" />Partager
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(payment.id)}>
+                            <Trash2 className="w-4 h-4 mr-2" />Supprimer
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>
