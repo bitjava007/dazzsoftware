@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 
 const PAYMENT_TYPES = [
@@ -30,6 +31,9 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
   currencies: any[];
 }) {
   const [open, setOpen] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [categoryId, setCategoryId] = useState("");
   const [subcategoryId, setSubcategoryId] = useState("");
   const [orderId, setOrderId] = useState("");
@@ -87,7 +91,15 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
     });
   };
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amountOriginal), 0);
+  const filteredExpenses = expenses.filter((e) => {
+    const matchCat = categoryFilter === "all" || e.category?.id === categoryFilter;
+    const d = new Date(e.expenseDate);
+    const matchStart = !startDate || d >= new Date(startDate);
+    const matchEnd = !endDate || d <= new Date(endDate + "T23:59:59");
+    return matchCat && matchStart && matchEnd;
+  });
+
+  const totalExpenses = filteredExpenses.reduce((sum, e) => sum + Number(e.amountOriginal), 0);
 
   return (
     <div className="space-y-4">
@@ -101,21 +113,22 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-5">
             <p className="text-sm text-gray-500">Nombre de dépenses</p>
-            <p className="text-2xl font-bold mt-1">{expenses.length}</p>
+            <p className="text-2xl font-bold mt-1">{filteredExpenses.length}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-5">
             <p className="text-sm text-gray-500">Liées aux commandes</p>
-            <p className="text-2xl font-bold mt-1">{expenses.filter((e) => e.linkedToOrder).length}</p>
+            <p className="text-2xl font-bold mt-1">{filteredExpenses.filter((e) => e.linkedToOrder).length}</p>
           </CardContent>
         </Card>
       </div>
 
       <Card className="border-0 shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Liste des dépenses</CardTitle>
-          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
+        <CardHeader className="pb-3 border-b space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <CardTitle className="text-base">Liste des dépenses</CardTitle>
+            <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
             <DialogTrigger asChild>
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
                 <Plus className="w-4 h-4 mr-1" />
@@ -217,8 +230,25 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-8 text-sm w-full sm:w-48">
+                <SelectValue placeholder="Toutes catégories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes catégories</SelectItem>
+                {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <DateRangeFilter
+              startDate={startDate} endDate={endDate}
+              onStartDateChange={setStartDate} onEndDateChange={setEndDate}
+              onReset={() => { setStartDate(""); setEndDate(""); setCategoryFilter("all"); }}
+            />
+          </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -233,12 +263,12 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {expenses.length === 0 ? (
+              {filteredExpenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-gray-400">Aucune dépense</TableCell>
+                  <TableCell colSpan={8} className="text-center py-10 text-gray-400">Aucune dépense trouvée</TableCell>
                 </TableRow>
               ) : (
-                expenses.map((expense) => (
+                filteredExpenses.map((expense) => (
                   <TableRow key={expense.id}>
                     <TableCell className="font-mono text-sm">{expense.expenseNumber}</TableCell>
                     <TableCell className="text-sm">{formatDate(expense.expenseDate)}</TableCell>
