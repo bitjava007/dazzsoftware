@@ -1,43 +1,106 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { BarChart3, FileText, TrendingUp } from "lucide-react";
+import { getDashboardStats } from "@/actions/dashboard";
+import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
+import { RapportsContent } from "./rapports-content";
 
-export default function RapportsPage() {
+async function getReportData() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const now = new Date();
+  const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+
+  const [stats, topClients, topArticles, expensesByCategory] = await Promise.all([
+    getDashboardStats(),
+    prisma.client.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        fullName: true,
+        orders: {
+          where: { deletedAt: null, currentStatus: { notIn: ["annulee"] } },
+          select: { sellingPrice: true },
+        },
+      },
+      take: 50,
+    }),
+    prisma.orderLine.groupBy({
+      by: ["articleId"],
+      where: { order: { deletedAt: null } },
+      _count: { id: true },
+      _sum: { lineTotal: true },
+      orderBy: { _sum: { lineTotal: "desc" } },
+      take: 10,
+    }),
+    prisma.expense.groupBy({
+      by: ["categoryId"],
+      where: { deletedAt: null, expenseDate: { gte: twelveMonthsAgo } },
+      _sum: { amountOriginal: true },
+      _count: { id: true },
+    }),
+  ]);
+
+  const topClientsData = topClients
+    .map((c) => ({
+      name: c.fullName,
+      total: c.orders.reduce((sum, o) => sum + Number(o.sellingPrice), 0),
+      commandes: c.orders.length,
+    }))
+    .filter((c) => c.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
+
+  const articleIds = topArticles.map((a) => a.articleId).filter(Boolean) as string[];
+  const articlesData = await prisma.article.findMany({
+    where: { id: { in: articleIds } },
+    select: { id: true, name: true },
+  });
+  const topArticlesData = topArticles
+    .map((a) => {
+      const article = articlesData.find((x) => x.id === a.articleId);
+      return {
+        name: article?.name ?? "Sans article",
+        quantite: a._count.id,
+        total: Number(a._sum.lineTotal ?? 0),
+      };
+    })
+    .filter((a) => a.total > 0);
+
+  const categoryIds = expensesByCategory.map((e) => e.categoryId).filter(Boolean) as string[];
+  const categoriesData = await prisma.expenseCategory.findMany({
+    where: { id: { in: categoryIds } },
+    select: { id: true, name: true },
+  });
+  const expensesByCategoryData = expensesByCategory
+    .map((e) => {
+      const cat = categoriesData.find((c) => c.id === e.categoryId);
+      return {
+        name: cat?.name ?? "Non catégorisé",
+        total: Number(e._sum.amountOriginal ?? 0),
+        count: e._count.id,
+      };
+    })
+    .filter((e) => e.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  return {
+    stats,
+    topClients: topClientsData,
+    topArticles: topArticlesData,
+    expensesByCategory: expensesByCategoryData,
+  };
+}
+
+export default async function RapportsPage() {
+  const data = await getReportData();
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Rapports</h1>
         <p className="text-sm text-gray-500 mt-1">Analyses et exportations de données</p>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-          <CardContent className="p-6 text-center">
-            <TrendingUp className="w-10 h-10 mx-auto text-blue-600 mb-3" />
-            <h3 className="font-semibold text-gray-900">Rapport de profit</h3>
-            <p className="text-sm text-gray-500 mt-1 mb-4">Analyse des ventes vs dépenses</p>
-            <Button variant="outline" size="sm" className="w-full">Générer</Button>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-          <CardContent className="p-6 text-center">
-            <BarChart3 className="w-10 h-10 mx-auto text-green-600 mb-3" />
-            <h3 className="font-semibold text-gray-900">Rapport de commandes</h3>
-            <p className="text-sm text-gray-500 mt-1 mb-4">Suivi de la production</p>
-            <Button variant="outline" size="sm" className="w-full">Générer</Button>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-          <CardContent className="p-6 text-center">
-            <FileText className="w-10 h-10 mx-auto text-purple-600 mb-3" />
-            <h3 className="font-semibold text-gray-900">Rapport clients</h3>
-            <p className="text-sm text-gray-500 mt-1 mb-4">Analyse de la clientèle</p>
-            <Button variant="outline" size="sm" className="w-full">Générer</Button>
-          </CardContent>
-        </Card>
-      </div>
+      <RapportsContent data={data} />
     </div>
   );
 }

@@ -33,10 +33,9 @@ interface Order {
   orderDate: Date;
   expectedDeliveryDate: Date | null;
   client: { fullName: string };
-  article: { name: string } | null;
+  lines: { article: { name: string } | null; quantity: number; unitPrice: unknown; lineTotal: unknown }[];
   currency: { symbol: string; code: string };
   payments: { amountOriginal: unknown }[];
-  expenses: { amountOriginal: unknown }[];
 }
 
 export function OrdersTable({ orders }: { orders: Order[] }) {
@@ -46,7 +45,7 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
     (o) =>
       o.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
       o.client.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      o.article?.name.toLowerCase().includes(search.toLowerCase())
+      o.lines.some((l) => l.article?.name.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
@@ -69,7 +68,7 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
             <TableRow>
               <TableHead>N° Commande</TableHead>
               <TableHead>Client</TableHead>
-              <TableHead>Article</TableHead>
+              <TableHead>Articles</TableHead>
               <TableHead>Statut</TableHead>
               <TableHead className="text-right">Prix vente</TableHead>
               <TableHead className="text-right">Payé</TableHead>
@@ -91,13 +90,18 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
                 const sellingPrice = Number(order.sellingPrice);
                 const totalPaid = order.payments.reduce((s, p) => s + Number(p.amountOriginal), 0);
                 const balance = sellingPrice - totalPaid;
+                const articleSummary = order.lines.length === 0
+                  ? "—"
+                  : order.lines.length === 1
+                    ? (order.lines[0].article?.name ?? "Article sans nom")
+                    : `${order.lines.length} articles`;
                 const config = STATUS_CONFIG[order.currentStatus] ?? { label: order.currentStatus, variant: "outline" as const };
 
                 return (
                   <TableRow key={order.id}>
                     <TableCell className="font-mono text-sm font-medium">{order.orderNumber}</TableCell>
                     <TableCell>{order.client.fullName}</TableCell>
-                    <TableCell className="text-gray-500">{order.article?.name ?? "—"}</TableCell>
+                    <TableCell className="text-gray-500 text-sm">{articleSummary}</TableCell>
                     <TableCell>
                       <Badge variant={config.variant}>{config.label}</Badge>
                     </TableCell>

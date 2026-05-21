@@ -8,17 +8,26 @@ import { createAuditLog } from "@/lib/audit";
 import { generateOrderNumber } from "@/lib/utils";
 import { OrderStatus } from "@prisma/client";
 
+const orderLineSchema = z.object({
+  articleId: z.string().optional(),
+  description: z.string().optional(),
+  quantity: z.coerce.number().int().positive().default(1),
+  unitPrice: z.coerce.number().positive("Le prix unitaire doit être positif"),
+});
+
 const orderSchema = z.object({
   clientId: z.string().min(1, "Sélectionnez un client"),
-  articleId: z.string().optional(),
   measurementId: z.string().optional(),
   country: z.string().optional(),
   city: z.string().optional(),
   orderDetails: z.string().optional(),
-  sellingPrice: z.coerce.number().positive("Le prix doit être positif"),
+  notes: z.string().optional(),
   currencyId: z.string().min(1, "Sélectionnez une devise"),
+  discount: z.coerce.number().min(0).default(0),
+  bonus: z.coerce.number().min(0).default(0),
   orderDate: z.string().optional(),
   expectedDeliveryDate: z.string().optional(),
+  lines: z.array(orderLineSchema).min(1, "Ajoutez au moins une ligne"),
 });
 
 export async function createOrderAction(formData: FormData) {
@@ -26,36 +35,51 @@ export async function createOrderAction(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
 
+  let linesRaw: unknown[];
+  try {
+    linesRaw = JSON.parse(formData.get("lines") as string || "[]");
+  } catch {
+    linesRaw = [];
+  }
+
   const parsed = orderSchema.safeParse({
     clientId: formData.get("clientId"),
-    articleId: formData.get("articleId") || undefined,
     measurementId: formData.get("measurementId") || undefined,
     country: formData.get("country") || undefined,
     city: formData.get("city") || undefined,
     orderDetails: formData.get("orderDetails") || undefined,
-    sellingPrice: formData.get("sellingPrice"),
+    notes: formData.get("notes") || undefined,
     currencyId: formData.get("currencyId"),
+    discount: formData.get("discount") || 0,
+    bonus: formData.get("bonus") || 0,
     orderDate: formData.get("orderDate") || undefined,
     expectedDeliveryDate: formData.get("expectedDeliveryDate") || undefined,
+    lines: linesRaw,
   });
 
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0].message };
-  }
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const subtotal = parsed.data.lines.reduce(
+    (sum, l) => sum + l.quantity * l.unitPrice,
+    0
+  );
+  const sellingPrice = Math.max(0, subtotal - parsed.data.discount - parsed.data.bonus);
+  const orderNumber = generateOrderNumber();
 
   try {
-    const orderNumber = generateOrderNumber();
-
     const order = await prisma.order.create({
       data: {
         orderNumber,
         clientId: parsed.data.clientId,
-        articleId: parsed.data.articleId || null,
         measurementId: parsed.data.measurementId || null,
         country: parsed.data.country || null,
         city: parsed.data.city || null,
         orderDetails: parsed.data.orderDetails || null,
-        sellingPrice: parsed.data.sellingPrice,
+        notes: parsed.data.notes || null,
+        subtotal,
+        discount: parsed.data.discount,
+        bonus: parsed.data.bonus,
+        sellingPrice,
         currencyId: parsed.data.currencyId,
         orderDate: parsed.data.orderDate ? new Date(parsed.data.orderDate) : new Date(),
         expectedDeliveryDate: parsed.data.expectedDeliveryDate
@@ -64,6 +88,15 @@ export async function createOrderAction(formData: FormData) {
         currentStatus: OrderStatus.brouillon,
         createdById: user.id,
         updatedById: user.id,
+        lines: {
+          create: parsed.data.lines.map((l) => ({
+            articleId: l.articleId || null,
+            description: l.description || null,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            lineTotal: l.quantity * l.unitPrice,
+          })),
+        },
       },
     });
 
@@ -81,7 +114,7 @@ export async function createOrderAction(formData: FormData) {
       tableName: "orders",
       recordId: order.id,
       action: "create",
-      newValues: { orderNumber, ...parsed.data },
+      newValues: { orderNumber, subtotal, sellingPrice },
     });
 
     revalidatePath("/commandes");
@@ -89,6 +122,93 @@ export async function createOrderAction(formData: FormData) {
   } catch (error) {
     console.error(error);
     return { error: "Erreur lors de la création de la commande" };
+  }
+}
+
+export async function updateOrderAction(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  let linesRaw: unknown[];
+  try {
+    linesRaw = JSON.parse(formData.get("lines") as string || "[]");
+  } catch {
+    linesRaw = [];
+  }
+
+  const parsed = orderSchema.safeParse({
+    clientId: formData.get("clientId"),
+    measurementId: formData.get("measurementId") || undefined,
+    country: formData.get("country") || undefined,
+    city: formData.get("city") || undefined,
+    orderDetails: formData.get("orderDetails") || undefined,
+    notes: formData.get("notes") || undefined,
+    currencyId: formData.get("currencyId"),
+    discount: formData.get("discount") || 0,
+    bonus: formData.get("bonus") || 0,
+    orderDate: formData.get("orderDate") || undefined,
+    expectedDeliveryDate: formData.get("expectedDeliveryDate") || undefined,
+    lines: linesRaw,
+  });
+
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const subtotal = parsed.data.lines.reduce(
+    (sum, l) => sum + l.quantity * l.unitPrice,
+    0
+  );
+  const sellingPrice = Math.max(0, subtotal - parsed.data.discount - parsed.data.bonus);
+
+  try {
+    // Delete existing lines, then recreate
+    await prisma.orderLine.deleteMany({ where: { orderId: id } });
+
+    const order = await prisma.order.update({
+      where: { id },
+      data: {
+        clientId: parsed.data.clientId,
+        measurementId: parsed.data.measurementId || null,
+        country: parsed.data.country || null,
+        city: parsed.data.city || null,
+        orderDetails: parsed.data.orderDetails || null,
+        notes: parsed.data.notes || null,
+        subtotal,
+        discount: parsed.data.discount,
+        bonus: parsed.data.bonus,
+        sellingPrice,
+        currencyId: parsed.data.currencyId,
+        orderDate: parsed.data.orderDate ? new Date(parsed.data.orderDate) : undefined,
+        expectedDeliveryDate: parsed.data.expectedDeliveryDate
+          ? new Date(parsed.data.expectedDeliveryDate)
+          : null,
+        updatedById: user.id,
+        lines: {
+          create: parsed.data.lines.map((l) => ({
+            articleId: l.articleId || null,
+            description: l.description || null,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            lineTotal: l.quantity * l.unitPrice,
+          })),
+        },
+      },
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      tableName: "orders",
+      recordId: id,
+      action: "update",
+      newValues: { subtotal, sellingPrice },
+    });
+
+    revalidatePath("/commandes");
+    revalidatePath(`/commandes/${id}`);
+    return { success: true, order };
+  } catch (error) {
+    console.error(error);
+    return { error: "Erreur lors de la modification" };
   }
 }
 
@@ -110,8 +230,7 @@ export async function updateOrderStatusAction(
       data: {
         currentStatus: newStatus,
         updatedById: user.id,
-        actualDeliveryDate:
-          newStatus === OrderStatus.livree ? new Date() : undefined,
+        actualDeliveryDate: newStatus === OrderStatus.livree ? new Date() : undefined,
       },
     });
 
@@ -134,6 +253,67 @@ export async function updateOrderStatusAction(
   }
 }
 
+export async function duplicateOrderAction(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  try {
+    const original = await prisma.order.findUnique({
+      where: { id },
+      include: { lines: true },
+    });
+    if (!original) return { error: "Commande introuvable" };
+
+    const orderNumber = generateOrderNumber();
+    const order = await prisma.order.create({
+      data: {
+        orderNumber,
+        clientId: original.clientId,
+        measurementId: original.measurementId,
+        country: original.country,
+        city: original.city,
+        orderDetails: original.orderDetails,
+        notes: original.notes,
+        subtotal: original.subtotal,
+        discount: original.discount,
+        bonus: original.bonus,
+        sellingPrice: original.sellingPrice,
+        currencyId: original.currencyId,
+        orderDate: new Date(),
+        expectedDeliveryDate: original.expectedDeliveryDate,
+        currentStatus: OrderStatus.brouillon,
+        createdById: user.id,
+        updatedById: user.id,
+        lines: {
+          create: original.lines.map((l) => ({
+            articleId: l.articleId,
+            description: l.description,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            lineTotal: l.lineTotal,
+          })),
+        },
+      },
+    });
+
+    await prisma.orderStatusHistory.create({
+      data: {
+        orderId: order.id,
+        newStatus: OrderStatus.brouillon,
+        changedById: user.id,
+        note: `Dupliqué depuis ${original.orderNumber}`,
+      },
+    });
+
+    revalidatePath("/commandes");
+    return { success: true, order };
+  } catch (error) {
+    console.error(error);
+    return { error: "Erreur lors de la duplication" };
+  }
+}
+
 export async function getOrders() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -143,10 +323,9 @@ export async function getOrders() {
     where: { deletedAt: null },
     include: {
       client: { select: { id: true, fullName: true, phone: true } },
-      article: { select: { id: true, name: true } },
       currency: { select: { id: true, code: true, symbol: true } },
       payments: { where: { deletedAt: null }, select: { amountOriginal: true, paymentType: true } },
-      expenses: { where: { deletedAt: null }, select: { amountOriginal: true } },
+      lines: { select: { quantity: true, unitPrice: true, lineTotal: true, article: { select: { name: true } } } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -157,9 +336,12 @@ export async function getOrderById(id: string) {
     where: { id, deletedAt: null },
     include: {
       client: true,
-      article: true,
       measurement: true,
       currency: true,
+      lines: {
+        include: { article: { include: { articleType: true } } },
+        orderBy: { createdAt: "asc" },
+      },
       statusHistory: {
         include: { changedBy: { select: { fullName: true } } },
         orderBy: { changedAt: "desc" },
@@ -187,9 +369,8 @@ export async function deleteOrderAction(id: string) {
   try {
     await prisma.order.update({
       where: { id },
-      data: { deletedAt: new Date(), deletedById: user.id },
+      data: { deletedAt: new Date(), deletedById: user.id, currentStatus: OrderStatus.annulee },
     });
-
     revalidatePath("/commandes");
     return { success: true };
   } catch (error) {

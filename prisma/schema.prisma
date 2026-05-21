@@ -27,6 +27,9 @@ model Profile {
   measurementsUpdated Measurement[] @relation("MeasurementUpdatedBy")
   measurementsDeleted Measurement[] @relation("MeasurementDeletedBy")
 
+  articleTypesCreated ArticleType[] @relation("ArticleTypeCreatedBy")
+  articleTypesUpdated ArticleType[] @relation("ArticleTypeUpdatedBy")
+
   articlesCreated Article[] @relation("ArticleCreatedBy")
   articlesUpdated Article[] @relation("ArticleUpdatedBy")
   articlesDeleted Article[] @relation("ArticleDeletedBy")
@@ -130,31 +133,32 @@ model Client {
 
 // ─── Measurements ─────────────────────────────────────────────────────────────
 model Measurement {
-  id            String    @id @default(uuid())
-  clientId      String    @map("client_id")
-  profileName   String?   @map("profile_name")
-  chest         Decimal?  @db.Decimal(6, 2)
-  waist         Decimal?  @db.Decimal(6, 2)
-  hips          Decimal?  @db.Decimal(6, 2)
-  shoulders     Decimal?  @db.Decimal(6, 2)
-  armLength     Decimal?  @map("arm_length") @db.Decimal(6, 2)
-  neck          Decimal?  @db.Decimal(6, 2)
-  shirtLength   Decimal?  @map("shirt_length") @db.Decimal(6, 2)
-  trouserLength Decimal?  @map("trouser_length") @db.Decimal(6, 2)
-  dressLength   Decimal?  @map("dress_length") @db.Decimal(6, 2)
-  wrist         Decimal?  @db.Decimal(6, 2)
-  thigh         Decimal?  @db.Decimal(6, 2)
-  knee          Decimal?  @db.Decimal(6, 2)
-  ankle         Decimal?  @db.Decimal(6, 2)
-  inseam        Decimal?  @db.Decimal(6, 2)
-  notes         String?
-  referencePhoto String?  @map("reference_photo")
-  createdById   String?   @map("created_by")
-  updatedById   String?   @map("updated_by")
-  deletedById   String?   @map("deleted_by")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+  id               String    @id @default(uuid())
+  clientId         String    @map("client_id")
+  profileName      String?   @map("profile_name")
+  chest            Decimal?  @db.Decimal(6, 2)
+  waist            Decimal?  @db.Decimal(6, 2)
+  hips             Decimal?  @db.Decimal(6, 2)
+  shoulders        Decimal?  @db.Decimal(6, 2)
+  armLength        Decimal?  @map("arm_length") @db.Decimal(6, 2)
+  neck             Decimal?  @db.Decimal(6, 2)
+  shirtLength      Decimal?  @map("shirt_length") @db.Decimal(6, 2)
+  trouserLength    Decimal?  @map("trouser_length") @db.Decimal(6, 2)
+  dressLength      Decimal?  @map("dress_length") @db.Decimal(6, 2)
+  wrist            Decimal?  @db.Decimal(6, 2)
+  thigh            Decimal?  @db.Decimal(6, 2)
+  knee             Decimal?  @db.Decimal(6, 2)
+  ankle            Decimal?  @db.Decimal(6, 2)
+  inseam           Decimal?  @db.Decimal(6, 2)
+  customMeasurements Json?   @map("custom_measurements")
+  notes            String?
+  referencePhoto   String?   @map("reference_photo")
+  createdById      String?   @map("created_by")
+  updatedById      String?   @map("updated_by")
+  deletedById      String?   @map("deleted_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
 
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   createdBy Profile? @relation("MeasurementCreatedBy", fields: [createdById], references: [id])
@@ -166,12 +170,33 @@ model Measurement {
   @@map("measurements")
 }
 
+// ─── Article Types ────────────────────────────────────────────────────────────
+model ArticleType {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean   @default(true) @map("is_active")
+  createdById String?   @map("created_by")
+  updatedById String?   @map("updated_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  createdBy Profile? @relation("ArticleTypeCreatedBy", fields: [createdById], references: [id])
+  updatedBy Profile? @relation("ArticleTypeUpdatedBy", fields: [updatedById], references: [id])
+
+  articles Article[]
+
+  @@map("article_types")
+}
+
 // ─── Articles ─────────────────────────────────────────────────────────────────
 model Article {
   id              String    @id @default(uuid())
   name            String
   description     String?
+  articleTypeId   String?   @map("article_type_id")
   indicativePrice Decimal?  @map("indicative_price") @db.Decimal(12, 2)
+  isActive        Boolean   @default(true) @map("is_active")
   createdById     String?   @map("created_by")
   updatedById     String?   @map("updated_by")
   deletedById     String?   @map("deleted_by")
@@ -179,11 +204,12 @@ model Article {
   updatedAt       DateTime  @updatedAt @map("updated_at")
   deletedAt       DateTime? @map("deleted_at")
 
-  createdBy Profile? @relation("ArticleCreatedBy", fields: [createdById], references: [id])
-  updatedBy Profile? @relation("ArticleUpdatedBy", fields: [updatedById], references: [id])
-  deletedBy Profile? @relation("ArticleDeletedBy", fields: [deletedById], references: [id])
+  articleType ArticleType? @relation(fields: [articleTypeId], references: [id])
+  createdBy   Profile?     @relation("ArticleCreatedBy", fields: [createdById], references: [id])
+  updatedBy   Profile?     @relation("ArticleUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy   Profile?     @relation("ArticleDeletedBy", fields: [deletedById], references: [id])
 
-  orders Order[]
+  orderLines OrderLine[]
 
   @@map("articles")
 }
@@ -263,11 +289,13 @@ model Order {
   id                   String      @id @default(uuid())
   orderNumber          String      @unique @map("order_number")
   clientId             String      @map("client_id")
-  articleId            String?     @map("article_id")
   measurementId        String?     @map("measurement_id")
   country              String?
   city                 String?
   orderDetails         String?     @map("order_details")
+  subtotal             Decimal     @default(0) @map("subtotal") @db.Decimal(12, 2)
+  discount             Decimal     @default(0) @map("discount") @db.Decimal(12, 2)
+  bonus                Decimal     @default(0) @map("bonus") @db.Decimal(12, 2)
   sellingPrice         Decimal     @map("selling_price") @db.Decimal(12, 2)
   currencyId           String      @map("currency_id")
   exchangeRateUsed     Decimal?    @map("exchange_rate_used") @db.Decimal(18, 8)
@@ -277,6 +305,7 @@ model Order {
   expectedDeliveryDate DateTime?   @map("expected_delivery_date")
   actualDeliveryDate   DateTime?   @map("actual_delivery_date")
   currentStatus        OrderStatus @default(brouillon) @map("current_status")
+  notes                String?
   createdById          String?     @map("created_by")
   updatedById          String?     @map("updated_by")
   deletedById          String?     @map("deleted_by")
@@ -285,19 +314,37 @@ model Order {
   deletedAt            DateTime?   @map("deleted_at")
 
   client      Client       @relation(fields: [clientId], references: [id])
-  article     Article?     @relation(fields: [articleId], references: [id])
   measurement Measurement? @relation(fields: [measurementId], references: [id])
   currency    Currency     @relation(fields: [currencyId], references: [id])
   createdBy   Profile?     @relation("OrderCreatedBy", fields: [createdById], references: [id])
   updatedBy   Profile?     @relation("OrderUpdatedBy", fields: [updatedById], references: [id])
   deletedBy   Profile?     @relation("OrderDeletedBy", fields: [deletedById], references: [id])
 
+  lines         OrderLine[]
   statusHistory OrderStatusHistory[]
   expenses      Expense[]
   payments      OrderPayment[]
   invoices      Invoice[]
 
   @@map("orders")
+}
+
+// ─── Order Lines ──────────────────────────────────────────────────────────────
+model OrderLine {
+  id          String  @id @default(uuid())
+  orderId     String  @map("order_id")
+  articleId   String? @map("article_id")
+  description String?
+  quantity    Int     @default(1)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(12, 2)
+  lineTotal   Decimal @map("line_total") @db.Decimal(12, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  article Article? @relation(fields: [articleId], references: [id])
+
+  @@map("order_lines")
 }
 
 enum OrderStatus {
@@ -375,6 +422,8 @@ enum PaymentType {
   mobile_money
   bank_transfer
   card
+  wave
+  orange_money
 
   @@map("payment_type")
 }
@@ -485,16 +534,16 @@ model Settings {
 
 // ─── Audit Logs ───────────────────────────────────────────────────────────────
 model AuditLog {
-  id         String      @id @default(uuid())
-  userId     String?     @map("user_id")
-  tableName  String      @map("table_name")
-  recordId   String      @map("record_id")
-  action     AuditAction
-  oldValues  Json?       @map("old_values")
-  newValues  Json?       @map("new_values")
-  ipAddress  String?     @map("ip_address")
-  userAgent  String?     @map("user_agent")
-  actionDate DateTime    @default(now()) @map("action_date")
+  id           String      @id @default(uuid())
+  userId       String?     @map("user_id")
+  tableName    String      @map("table_name")
+  recordId     String      @map("record_id")
+  action       AuditAction
+  oldValues    Json?       @map("old_values")
+  newValues    Json?       @map("new_values")
+  ipAddress    String?     @map("ip_address")
+  userAgent    String?     @map("user_agent")
+  actionDate   DateTime    @default(now()) @map("action_date")
 
   user Profile? @relation(fields: [userId], references: [id])
 

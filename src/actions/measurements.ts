@@ -32,14 +32,31 @@ function parseOptionalDecimal(value: FormDataEntryValue | null) {
   return isNaN(num) ? undefined : num;
 }
 
-export async function createMeasurementAction(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+function buildMeasurementData(parsed: ReturnType<typeof measurementSchema.parse>) {
+  return {
+    profileName: parsed.profileName || null,
+    chest: parsed.chest ?? null,
+    waist: parsed.waist ?? null,
+    hips: parsed.hips ?? null,
+    shoulders: parsed.shoulders ?? null,
+    armLength: parsed.armLength ?? null,
+    neck: parsed.neck ?? null,
+    shirtLength: parsed.shirtLength ?? null,
+    trouserLength: parsed.trouserLength ?? null,
+    dressLength: parsed.dressLength ?? null,
+    wrist: parsed.wrist ?? null,
+    thigh: parsed.thigh ?? null,
+    knee: parsed.knee ?? null,
+    ankle: parsed.ankle ?? null,
+    inseam: parsed.inseam ?? null,
+    notes: parsed.notes || null,
+  };
+}
 
-  const parsed = measurementSchema.safeParse({
-    clientId: formData.get("clientId"),
-    profileName: formData.get("profileName") || undefined,
+function parseFormData(formData: FormData) {
+  return {
+    clientId: formData.get("clientId") as string,
+    profileName: (formData.get("profileName") as string) || undefined,
     chest: parseOptionalDecimal(formData.get("chest")),
     waist: parseOptionalDecimal(formData.get("waist")),
     hips: parseOptionalDecimal(formData.get("hips")),
@@ -54,17 +71,23 @@ export async function createMeasurementAction(formData: FormData) {
     knee: parseOptionalDecimal(formData.get("knee")),
     ankle: parseOptionalDecimal(formData.get("ankle")),
     inseam: parseOptionalDecimal(formData.get("inseam")),
-    notes: formData.get("notes") || undefined,
-  });
+    notes: (formData.get("notes") as string) || undefined,
+  };
+}
 
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0].message };
-  }
+export async function createMeasurementAction(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const parsed = measurementSchema.safeParse(parseFormData(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
     const measurement = await prisma.measurement.create({
       data: {
-        ...parsed.data,
+        clientId: parsed.data.clientId,
+        ...buildMeasurementData(parsed.data),
         createdById: user.id,
         updatedById: user.id,
       },
@@ -75,7 +98,7 @@ export async function createMeasurementAction(formData: FormData) {
       tableName: "measurements",
       recordId: measurement.id,
       action: "create",
-      newValues: parsed.data,
+      newValues: parsed.data as Record<string, unknown>,
     });
 
     revalidatePath("/mesures");
@@ -87,6 +110,43 @@ export async function createMeasurementAction(formData: FormData) {
   }
 }
 
+export async function updateMeasurementAction(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const raw = parseFormData(formData);
+  const parsed = measurementSchema.safeParse(raw);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  try {
+    const old = await prisma.measurement.findUnique({ where: { id } });
+    const measurement = await prisma.measurement.update({
+      where: { id },
+      data: {
+        ...buildMeasurementData(parsed.data),
+        updatedById: user.id,
+      },
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      tableName: "measurements",
+      recordId: id,
+      action: "update",
+      oldValues: old as Record<string, unknown>,
+      newValues: parsed.data as Record<string, unknown>,
+    });
+
+    revalidatePath("/mesures");
+    revalidatePath(`/clients/${parsed.data.clientId}`);
+    return { success: true, measurement };
+  } catch (error) {
+    console.error(error);
+    return { error: "Erreur lors de la modification des mesures" };
+  }
+}
+
 export async function getMeasurements() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -94,9 +154,7 @@ export async function getMeasurements() {
 
   return prisma.measurement.findMany({
     where: { deletedAt: null },
-    include: {
-      client: { select: { id: true, fullName: true } },
-    },
+    include: { client: { select: { id: true, fullName: true } } },
     orderBy: { createdAt: "desc" },
   });
 }

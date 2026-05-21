@@ -159,8 +159,8 @@ export async function getClientById(id: string) {
       orders: {
         where: { deletedAt: null },
         include: {
-          article: true,
           currency: true,
+          lines: { select: { lineTotal: true } },
           payments: { where: { deletedAt: null } },
           expenses: { where: { deletedAt: null } },
           invoices: { where: { deletedAt: null } },

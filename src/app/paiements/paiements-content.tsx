@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createPaymentAction, deletePaymentAction } from "@/actions/payments";
+import { createPaymentAction, updatePaymentAction, deletePaymentAction } from "@/actions/payments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2 } from "lucide-react";
 
 const PAYMENT_TYPES = [
   { value: "acompte_initial", label: "Acompte initial" },
@@ -27,47 +27,173 @@ const PAYMENT_TYPES = [
 const PAYMENT_METHODS = [
   { value: "cash", label: "Espèces" },
   { value: "mobile_money", label: "Mobile Money" },
+  { value: "wave", label: "Wave" },
+  { value: "orange_money", label: "Orange Money" },
   { value: "bank_transfer", label: "Virement bancaire" },
   { value: "card", label: "Carte bancaire" },
 ];
 
+interface Payment {
+  id: string;
+  receiptNumber: string;
+  paymentDate: Date | string;
+  paymentType: string;
+  paymentMethod: string;
+  amountOriginal: unknown;
+  paymentReference: string | null;
+  label: string | null;
+  orderId: string;
+  currencyId: string;
+  order: { orderNumber: string; client: { fullName: string } };
+  currency: { code: string };
+}
+
+function PaymentForm({
+  payment,
+  orders,
+  currencies,
+  onSubmit,
+  onCancel,
+  isPending,
+}: {
+  payment?: Payment;
+  orders: any[];
+  currencies: any[];
+  onSubmit: (formData: FormData, orderId: string, paymentType: string, paymentMethod: string, currencyId: string) => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const [orderId, setOrderId] = useState(payment?.orderId ?? "");
+  const [paymentType, setPaymentType] = useState(payment?.paymentType ?? "");
+  const [paymentMethod, setPaymentMethod] = useState(payment?.paymentMethod ?? "");
+  const [currencyId, setCurrencyId] = useState(payment?.currencyId ?? "");
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    onSubmit(formData, orderId, paymentType, paymentMethod, currencyId);
+  };
+
+  const paymentDateValue = payment?.paymentDate
+    ? new Date(payment.paymentDate).toISOString().split("T")[0]
+    : new Date().toISOString().split("T")[0];
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="col-span-2 space-y-1">
+          <Label>Commande *</Label>
+          <Select value={orderId} onValueChange={setOrderId}>
+            <SelectTrigger><SelectValue placeholder="Sélectionner une commande..." /></SelectTrigger>
+            <SelectContent>
+              {orders.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.orderNumber} — {o.client.fullName}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label>Type de paiement *</Label>
+          <Select value={paymentType} onValueChange={setPaymentType}>
+            <SelectTrigger><SelectValue placeholder="Type..." /></SelectTrigger>
+            <SelectContent>
+              {PAYMENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label>Méthode *</Label>
+          <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+            <SelectTrigger><SelectValue placeholder="Méthode..." /></SelectTrigger>
+            <SelectContent>
+              {PAYMENT_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="amountOriginal">Montant *</Label>
+          <Input id="amountOriginal" name="amountOriginal" type="number" step="0.01" min="0" required
+            defaultValue={payment ? String(Number(payment.amountOriginal)) : ""} />
+        </div>
+
+        <div className="space-y-1">
+          <Label>Devise *</Label>
+          <Select value={currencyId} onValueChange={setCurrencyId}>
+            <SelectTrigger><SelectValue placeholder="Devise..." /></SelectTrigger>
+            <SelectContent>
+              {currencies.map((c) => <SelectItem key={c.id} value={c.id}>{c.code}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="paymentDate">Date *</Label>
+          <Input id="paymentDate" name="paymentDate" type="date" required defaultValue={paymentDateValue} />
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="paymentReference">Référence</Label>
+          <Input id="paymentReference" name="paymentReference" defaultValue={payment?.paymentReference ?? ""} placeholder="N° de transaction" />
+        </div>
+
+        <div className="col-span-2 space-y-1">
+          <Label htmlFor="label">Libellé</Label>
+          <Input id="label" name="label" defaultValue={payment?.label ?? ""} placeholder="Description du paiement" />
+        </div>
+      </div>
+
+      <div className="flex gap-2 justify-end">
+        <Button type="button" variant="outline" onClick={onCancel}>Annuler</Button>
+        <Button type="submit" disabled={isPending || !orderId || !paymentType || !paymentMethod || !currencyId} className="bg-blue-600 hover:bg-blue-700">
+          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (payment ? "Modifier" : "Enregistrer")}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function PaiementsContent({ payments, orders, currencies }: {
-  payments: any[];
+  payments: Payment[];
   orders: any[];
   currencies: any[];
 }) {
-  const [open, setOpen] = useState(false);
-  const [orderId, setOrderId] = useState("");
-  const [paymentType, setPaymentType] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("");
-  const [currencyId, setCurrencyId] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   const router = useRouter();
 
-  const resetForm = () => {
-    setOrderId("");
-    setPaymentType("");
-    setPaymentMethod("");
-    setCurrencyId("");
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    if (orderId) formData.set("orderId", orderId);
-    if (paymentType) formData.set("paymentType", paymentType);
-    if (paymentMethod) formData.set("paymentMethod", paymentMethod);
-    if (currencyId) formData.set("currencyId", currencyId);
-
+  const handleCreate = (formData: FormData, orderId: string, paymentType: string, paymentMethod: string, currencyId: string) => {
+    formData.set("orderId", orderId);
+    formData.set("paymentType", paymentType);
+    formData.set("paymentMethod", paymentMethod);
+    formData.set("currencyId", currencyId);
     startTransition(async () => {
       const result = await createPaymentAction(formData);
       if (result.error) {
         toast({ title: "Erreur", description: result.error, variant: "destructive" });
       } else {
         toast({ title: "Paiement enregistré" });
-        setOpen(false);
-        resetForm();
+        setCreateOpen(false);
+        router.refresh();
+      }
+    });
+  };
+
+  const handleUpdate = (formData: FormData, orderId: string, paymentType: string, paymentMethod: string, currencyId: string) => {
+    if (!editingPayment) return;
+    formData.set("orderId", orderId);
+    formData.set("paymentType", paymentType);
+    formData.set("paymentMethod", paymentMethod);
+    formData.set("currencyId", currencyId);
+    startTransition(async () => {
+      const result = await updatePaymentAction(editingPayment.id, formData);
+      if (result.error) {
+        toast({ title: "Erreur", description: result.error, variant: "destructive" });
+      } else {
+        toast({ title: "Paiement modifié" });
+        setEditingPayment(null);
         router.refresh();
       }
     });
@@ -116,100 +242,30 @@ export function PaiementsContent({ payments, orders, currencies }: {
       <Card className="border-0 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Historique des paiements</CardTitle>
-          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="w-4 h-4 mr-1" />
-                Nouveau paiement
+                <Plus className="w-4 h-4 mr-1" />Nouveau paiement
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Enregistrer un paiement</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2 space-y-1">
-                    <Label>Commande *</Label>
-                    <Select value={orderId} onValueChange={setOrderId} required>
-                      <SelectTrigger><SelectValue placeholder="Sélectionner une commande..." /></SelectTrigger>
-                      <SelectContent>
-                        {orders.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.orderNumber} — {o.client.fullName}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label>Type de paiement *</Label>
-                    <Select value={paymentType} onValueChange={setPaymentType}>
-                      <SelectTrigger><SelectValue placeholder="Type..." /></SelectTrigger>
-                      <SelectContent>
-                        {PAYMENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label>Méthode *</Label>
-                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                      <SelectTrigger><SelectValue placeholder="Méthode..." /></SelectTrigger>
-                      <SelectContent>
-                        {PAYMENT_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="amountOriginal">Montant *</Label>
-                    <Input id="amountOriginal" name="amountOriginal" type="number" step="0.01" min="0" required />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label>Devise *</Label>
-                    <Select value={currencyId} onValueChange={setCurrencyId}>
-                      <SelectTrigger><SelectValue placeholder="Devise..." /></SelectTrigger>
-                      <SelectContent>
-                        {currencies.map((c) => <SelectItem key={c.id} value={c.id}>{c.code}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="paymentDate">Date *</Label>
-                    <Input id="paymentDate" name="paymentDate" type="date" required defaultValue={new Date().toISOString().split("T")[0]} />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="paymentReference">Référence</Label>
-                    <Input id="paymentReference" name="paymentReference" placeholder="N° de transaction" />
-                  </div>
-
-                  <div className="col-span-2 space-y-1">
-                    <Label htmlFor="label">Libellé</Label>
-                    <Input id="label" name="label" placeholder="Description du paiement" />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 justify-end">
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
-                  <Button type="submit" disabled={isPending || !orderId || !paymentType || !paymentMethod || !currencyId} className="bg-blue-600 hover:bg-blue-700">
-                    {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enregistrer"}
-                  </Button>
-                </div>
-              </form>
+              <PaymentForm orders={orders} currencies={currencies} onSubmit={handleCreate} onCancel={() => setCreateOpen(false)} isPending={isPending} />
             </DialogContent>
           </Dialog>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>N° Reçu</TableHead>
                 <TableHead>Date</TableHead>
-                <TableHead>Commande</TableHead>
-                <TableHead>Client</TableHead>
+                <TableHead className="hidden sm:table-cell">Commande</TableHead>
+                <TableHead className="hidden md:table-cell">Client</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Méthode</TableHead>
+                <TableHead className="hidden lg:table-cell">Méthode</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -219,36 +275,58 @@ export function PaiementsContent({ payments, orders, currencies }: {
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-10 text-gray-400">Aucun paiement</TableCell>
                 </TableRow>
-              ) : (
-                payments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell className="font-mono text-sm">{payment.receiptNumber}</TableCell>
-                    <TableCell className="text-sm">{formatDate(payment.paymentDate)}</TableCell>
-                    <TableCell className="font-mono text-xs">{payment.order.orderNumber}</TableCell>
-                    <TableCell className="text-sm">{payment.order.client.fullName}</TableCell>
-                    <TableCell>
-                      <Badge variant="info" className="text-xs">
-                        {PAYMENT_TYPES.find((t) => t.value === payment.paymentType)?.label ?? payment.paymentType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-gray-500">
-                      {PAYMENT_METHODS.find((m) => m.value === payment.paymentMethod)?.label ?? payment.paymentMethod}
-                    </TableCell>
-                    <TableCell className="text-right font-medium text-green-600">
-                      {formatCurrency(Number(payment.amountOriginal))} {payment.currency.code}
-                    </TableCell>
-                    <TableCell className="text-right">
+              ) : payments.map((payment) => (
+                <TableRow key={payment.id}>
+                  <TableCell className="font-mono text-xs">{payment.receiptNumber}</TableCell>
+                  <TableCell className="text-sm">{formatDate(payment.paymentDate)}</TableCell>
+                  <TableCell className="hidden sm:table-cell font-mono text-xs">{payment.order.orderNumber}</TableCell>
+                  <TableCell className="hidden md:table-cell text-sm">{payment.order.client.fullName}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">
+                      {PAYMENT_TYPES.find((t) => t.value === payment.paymentType)?.label ?? payment.paymentType}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell text-xs text-gray-500">
+                    {PAYMENT_METHODS.find((m) => m.value === payment.paymentMethod)?.label ?? payment.paymentMethod}
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-green-600">
+                    {formatCurrency(Number(payment.amountOriginal))} {payment.currency.code}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => setEditingPayment(payment)}>
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
                       <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(payment.id)} disabled={isPending}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit Payment Dialog */}
+      <Dialog open={!!editingPayment} onOpenChange={(v) => { if (!v) setEditingPayment(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Modifier le paiement</DialogTitle>
+          </DialogHeader>
+          {editingPayment && (
+            <PaymentForm
+              payment={editingPayment}
+              orders={orders}
+              currencies={currencies}
+              onSubmit={handleUpdate}
+              onCancel={() => setEditingPayment(null)}
+              isPending={isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
