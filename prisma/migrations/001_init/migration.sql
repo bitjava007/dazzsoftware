@@ -209,25 +209,13 @@ CREATE TABLE IF NOT EXISTS "expense_subcategories" (
 );
 
 INSERT INTO "expense_categories" ("id", "name", "description") VALUES
-  ('cat-mat', 'Matières premières', 'Tissu, fil, boutons, fermetures'),
-  ('cat-main', 'Main d''œuvre', 'Rémunération des tailleurs'),
-  ('cat-charge', 'Charges fixes', 'Loyer, électricité, eau'),
-  ('cat-equip', 'Équipement', 'Machines à coudre, outils'),
-  ('cat-divers', 'Divers', 'Autres dépenses')
+(uuid_generate_v4(), 'Matières premières', 'Tissu, fil, boutons, fermetures'),
+(uuid_generate_v4(), 'Main d''oeuvre', 'Rémunération des tailleurs'),
+(uuid_generate_v4(), 'Charges fixes', 'Loyer, électricité, eau'),
+(uuid_generate_v4(), 'Équipement', 'Machines à coudre, outils'),
+(uuid_generate_v4(), 'Divers', 'Autres dépenses')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO "expense_subcategories" ("category_id", "name") VALUES
-  ('cat-mat', 'Tissu'),
-  ('cat-mat', 'Fil & accessoires'),
-  ('cat-mat', 'Boutons & fermetures'),
-  ('cat-main', 'Salaires'),
-  ('cat-main', 'Freelance'),
-  ('cat-charge', 'Loyer'),
-  ('cat-charge', 'Électricité'),
-  ('cat-charge', 'Eau'),
-  ('cat-equip', 'Machine à coudre'),
-  ('cat-equip', 'Entretien machines')
-ON CONFLICT DO NOTHING;
 
 -- ─── Orders ────────────────────────────────────────────────────────────────────
 
