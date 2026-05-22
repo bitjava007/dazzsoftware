@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getOrderById } from "@/actions/orders";
+import { getOrderNotifications } from "@/actions/notifications";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -9,6 +10,7 @@ import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { ArrowLeft, User, Calendar, CreditCard, Receipt, Edit2, Package, FileText } from "lucide-react";
 import { OrderStatusChanger } from "./order-status-changer";
 import { InvoiceButton } from "./invoice-button";
+import { OrderNotifications } from "./order-notifications";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   brouillon: { label: "Brouillon", color: "bg-gray-100 text-gray-700" },
@@ -27,7 +29,10 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 export default async function CommandeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const order = await getOrderById(id);
+  const [order, orderNotifications] = await Promise.all([
+    getOrderById(id),
+    getOrderNotifications(id),
+  ]);
 
   if (!order) notFound();
 
@@ -336,6 +341,15 @@ export default async function CommandeDetailPage({ params }: { params: Promise<{
               </div>
             </CardContent>
           </Card>
+
+          {/* Notifications */}
+          <OrderNotifications
+            orderId={id}
+            orderNumber={order.orderNumber}
+            clientPhone={(order.client as any).phone ?? null}
+            clientWhatsapp={(order.client as any).whatsappNumber ?? null}
+            notifications={orderNotifications}
+          />
         </div>
       </div>
     </div>

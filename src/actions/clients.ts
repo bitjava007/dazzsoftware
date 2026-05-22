@@ -10,6 +10,8 @@ const clientSchema = z.object({
   fullName: z.string().min(2, "Le nom doit avoir au moins 2 caractères"),
   phone: z.string().optional(),
   email: z.string().email("Email invalide").optional().or(z.literal("")),
+  whatsappNumber: z.string().optional(),
+  notificationOptIn: z.boolean().optional(),
   country: z.string().optional(),
   city: z.string().optional(),
   address: z.string().optional(),
@@ -25,6 +27,8 @@ export async function createClientAction(formData: FormData) {
     fullName: formData.get("fullName"),
     phone: formData.get("phone") || undefined,
     email: formData.get("email") || undefined,
+    whatsappNumber: formData.get("whatsappNumber") || undefined,
+    notificationOptIn: formData.get("notificationOptIn") !== "false",
     country: formData.get("country") || undefined,
     city: formData.get("city") || undefined,
     address: formData.get("address") || undefined,
@@ -40,6 +44,7 @@ export async function createClientAction(formData: FormData) {
       data: {
         ...parsed.data,
         email: parsed.data.email || null,
+        whatsappNumber: parsed.data.whatsappNumber || null,
         createdById: user.id,
         updatedById: user.id,
       },
@@ -70,6 +75,8 @@ export async function updateClientAction(id: string, formData: FormData) {
     fullName: formData.get("fullName"),
     phone: formData.get("phone") || undefined,
     email: formData.get("email") || undefined,
+    whatsappNumber: formData.get("whatsappNumber") || undefined,
+    notificationOptIn: formData.get("notificationOptIn") !== "false",
     country: formData.get("country") || undefined,
     city: formData.get("city") || undefined,
     address: formData.get("address") || undefined,
@@ -84,7 +91,12 @@ export async function updateClientAction(id: string, formData: FormData) {
     const old = await prisma.client.findUnique({ where: { id } });
     const client = await prisma.client.update({
       where: { id },
-      data: { ...parsed.data, email: parsed.data.email || null, updatedById: user.id },
+      data: {
+        ...parsed.data,
+        email: parsed.data.email || null,
+        whatsappNumber: parsed.data.whatsappNumber || null,
+        updatedById: user.id,
+      },
     });
 
     await createAuditLog({

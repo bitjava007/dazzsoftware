@@ -60,7 +60,7 @@ export function ClientsTable({ clients }: ClientsTableProps) {
 
   return (
     <Card className="border-0 shadow-sm">
-      <CardContent className="p-0">
+      <CardContent className="p-0 overflow-x-auto">
         {/* Search */}
         <div className="p-4 border-b">
           <div className="relative max-w-sm">

@@ -20,6 +20,8 @@ interface Client {
   fullName: string;
   phone: string | null;
   email: string | null;
+  whatsappNumber: string | null;
+  notificationOptIn: boolean;
   country: string | null;
   city: string | null;
   address: string | null;
@@ -63,7 +65,7 @@ export default function ModifierClientPage({ params }: { params: Promise<{ id: s
 
   if (!client) {
     return (
-      <div className="p-6 flex items-center justify-center">
+      <div className="p-4 sm:p-6 flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
       </div>
     );
@@ -97,6 +99,25 @@ export default function ModifierClientPage({ params }: { params: Promise<{ id: s
               <div className="space-y-1">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" name="email" type="email" defaultValue={client.email ?? ""} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="whatsappNumber">Numéro WhatsApp</Label>
+                <Input id="whatsappNumber" name="whatsappNumber" defaultValue={client.whatsappNumber ?? ""} placeholder="+243..." />
+              </div>
+              <div className="space-y-1 flex flex-col justify-end">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="notificationOptIn"
+                    value="true"
+                    defaultChecked={client.notificationOptIn}
+                    className="rounded"
+                  />
+                  <span>Accepte les notifications</span>
+                </label>
               </div>
             </div>
 

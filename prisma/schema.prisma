@@ -106,28 +106,31 @@ enum LoginStatus {
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 model Client {
-  id          String    @id @default(uuid())
-  fullName    String    @map("full_name")
-  phone       String?
-  email       String?
-  country     String?
-  city        String?
-  address     String?
-  notes       String?
-  createdById String?   @map("created_by")
-  updatedById String?   @map("updated_by")
-  deletedById String?   @map("deleted_by")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  id                  String    @id @default(uuid())
+  fullName            String    @map("full_name")
+  phone               String?
+  email               String?
+  whatsappNumber      String?   @map("whatsapp_number")
+  notificationOptIn   Boolean   @default(true) @map("notification_opt_in")
+  country             String?
+  city                String?
+  address             String?
+  notes               String?
+  createdById         String?   @map("created_by")
+  updatedById         String?   @map("updated_by")
+  deletedById         String?   @map("deleted_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
 
   createdBy Profile? @relation("ClientCreatedBy", fields: [createdById], references: [id])
   updatedBy Profile? @relation("ClientUpdatedBy", fields: [updatedById], references: [id])
   deletedBy Profile? @relation("ClientDeletedBy", fields: [deletedById], references: [id])
 
-  measurements Measurement[]
-  orders       Order[]
-  invoices     Invoice[]
+  measurements  Measurement[]
+  orders        Order[]
+  invoices      Invoice[]
+  notifications Notification[]
 
   @@map("clients")
 }
@@ -327,6 +330,7 @@ model Order {
   payments      OrderPayment[]
   invoices      Invoice[]
   invoiceItems  InvoiceItem[]
+  notifications Notification[]
 
   @@map("orders")
 }
@@ -536,22 +540,76 @@ enum InvoiceStatus {
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 model Settings {
-  id                String   @id @default(uuid())
-  companyName       String   @map("company_name")
-  logo              String?
-  address           String?
-  phone             String?
-  email             String?
-  taxNumber         String?  @map("tax_number")
-  defaultCurrencyId String?  @map("default_currency_id")
-  invoicePrefix     String   @default("FACT-") @map("invoice_prefix")
-  receiptPrefix     String   @default("RECU-") @map("receipt_prefix")
-  language          String   @default("fr")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                          String   @id @default(uuid())
+  companyName                 String   @map("company_name")
+  logo                        String?
+  address                     String?
+  phone                       String?
+  email                       String?
+  taxNumber                   String?  @map("tax_number")
+  defaultCurrencyId           String?  @map("default_currency_id")
+  invoicePrefix               String   @default("FACT-") @map("invoice_prefix")
+  receiptPrefix               String   @default("RECU-") @map("receipt_prefix")
+  language                    String   @default("fr")
+  whatsappEnabled             Boolean  @default(false) @map("whatsapp_enabled")
+  whatsappApiKey              String?  @map("whatsapp_api_key")
+  whatsappPhoneNumberId       String?  @map("whatsapp_phone_number_id")
+  whatsappBusinessAccountId   String?  @map("whatsapp_business_account_id")
+  companySenderName           String?  @map("company_sender_name")
+  smsEnabled                  Boolean  @default(false) @map("sms_enabled")
+  smsProvider                 String?  @map("sms_provider")
+  smsApiKey                   String?  @map("sms_api_key")
+  emailEnabled                Boolean  @default(false) @map("email_enabled")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
 
   defaultCurrency Currency? @relation(fields: [defaultCurrencyId], references: [id])
 
   @@map("settings")
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+model Notification {
+  id               String         @id @default(uuid())
+  clientId         String         @map("client_id")
+  orderId          String?        @map("order_id")
+  channel          NotifChannel
+  eventType        NotifEventType @map("event_type")
+  recipient        String
+  message          String
+  status           NotifStatus    @default(pending)
+  providerResponse String?        @map("provider_response")
+  sentAt           DateTime?      @map("sent_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  client Client  @relation(fields: [clientId], references: [id])
+  order  Order?  @relation(fields: [orderId], references: [id])
+
+  @@map("notifications")
+}
+
+enum NotifChannel {
+  whatsapp
+  sms
+  email
+
+  @@map("notif_channel")
+}
+
+enum NotifEventType {
+  order_created
+  order_ready
+  order_delivered
+  manual_send
+
+  @@map("notif_event_type")
+}
+
+enum NotifStatus {
+  pending
+  sent
+  failed
+
+  @@map("notif_status")
 }
 
 // ─── Audit Logs ───────────────────────────────────────────────────────────────
