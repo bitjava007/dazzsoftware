@@ -70,6 +70,19 @@ export default function NouveauClientPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
+                <Label htmlFor="whatsappNumber">Numéro WhatsApp</Label>
+                <Input id="whatsappNumber" name="whatsappNumber" placeholder="+243..." />
+              </div>
+              <div className="space-y-1 flex flex-col justify-end">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" name="notificationOptIn" value="true" defaultChecked className="rounded" />
+                  <span>Accepte les notifications</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
                 <Label>Pays</Label>
                 <Select value={country} onValueChange={setCountry}>
                   <SelectTrigger>

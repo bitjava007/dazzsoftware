@@ -13,7 +13,8 @@
     "taux_de_change": "Taux de change",
     "utilisateurs": "Utilisateurs",
     "deconnexion": "Déconnexion",
-    "profil": "Mon profil"
+    "profil": "Mon profil",
+    "notifications": "Notifications"
   },
   "auth": {
     "connexion": "Connexion",

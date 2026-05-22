@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Ruler, ShoppingBag, ClipboardList,
   Receipt, CreditCard, FileText, BarChart3, Settings, LogOut, Scissors,
-  UserCheck, ArrowLeftRight, X,
+  UserCheck, ArrowLeftRight, X, Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -24,6 +24,7 @@ const navItems = [
   { href: "/rapports", icon: BarChart3, key: "rapports" },
   { href: "/taux-de-change", icon: ArrowLeftRight, key: "taux_de_change" },
   { href: "/utilisateurs", icon: UserCheck, key: "utilisateurs" },
+  { href: "/notifications", icon: Bell, key: "notifications" },
   { href: "/parametres", icon: Settings, key: "parametres" },
 ];
 

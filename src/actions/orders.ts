@@ -6,7 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { createAuditLog } from "@/lib/audit";
 import { generateOrderNumber } from "@/lib/utils";
-import { OrderStatus } from "@prisma/client";
+import { NotifEventType, OrderStatus } from "@prisma/client";
+import { sendOrderNotification } from "@/lib/notifications";
 
 const orderLineSchema = z.object({
   articleId: z.string().optional(),
@@ -243,6 +244,18 @@ export async function updateOrderStatusAction(
         changedById: user.id,
       },
     });
+
+    // Trigger automatic notifications for key status transitions
+    const notifMap: Partial<Record<OrderStatus, NotifEventType>> = {
+      [OrderStatus.confirmee]: NotifEventType.order_created,
+      [OrderStatus.pret_livraison]: NotifEventType.order_ready,
+      [OrderStatus.livree]: NotifEventType.order_delivered,
+    };
+    const eventType = notifMap[newStatus];
+    if (eventType) {
+      // Fire-and-forget (non-blocking)
+      sendOrderNotification(orderId, eventType).catch(console.error);
+    }
 
     revalidatePath("/commandes");
     revalidatePath(`/commandes/${orderId}`);

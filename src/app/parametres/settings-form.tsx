@@ -1,16 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useRef } from "react";
+import { useState, useRef, useTransition } from "react";
 import { upsertSettingsAction, uploadLogoAction, deleteLogoAction } from "@/actions/settings";
+import { sendTestNotificationAction } from "@/actions/notifications";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, Upload, Trash2, ImageIcon } from "lucide-react";
+import { Loader2, Save, Upload, Trash2, ImageIcon, MessageSquare, Send } from "lucide-react";
 
 interface Currency { id: string; code: string; name: string; symbol: string; }
 interface Settings {
@@ -23,6 +25,15 @@ interface Settings {
   defaultCurrencyId: string | null;
   invoicePrefix: string;
   receiptPrefix: string;
+  whatsappEnabled: boolean;
+  whatsappApiKey: string | null;
+  whatsappPhoneNumberId: string | null;
+  whatsappBusinessAccountId: string | null;
+  companySenderName: string | null;
+  smsEnabled: boolean;
+  smsProvider: string | null;
+  smsApiKey: string | null;
+  emailEnabled: boolean;
 }
 
 interface SettingsFormProps {
@@ -39,12 +50,20 @@ export function SettingsForm({ settings, currencies }: SettingsFormProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [currencyId, setCurrencyId] = useState(settings?.defaultCurrencyId ?? "");
   const [logoUrl, setLogoUrl] = useState<string | null>(settings?.logo ?? null);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(settings?.whatsappEnabled ?? false);
+  const [smsEnabled, setSmsEnabled] = useState(settings?.smsEnabled ?? false);
+  const [emailEnabled, setEmailEnabled] = useState(settings?.emailEnabled ?? false);
+  const [testRecipient, setTestRecipient] = useState("");
+  const [isTestPending, startTestTransition] = useTransition();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     const formData = new FormData(e.currentTarget);
     if (currencyId) formData.set("defaultCurrencyId", currencyId);
+    formData.set("whatsappEnabled", String(whatsappEnabled));
+    formData.set("smsEnabled", String(smsEnabled));
+    formData.set("emailEnabled", String(emailEnabled));
     const result = await upsertSettingsAction(formData);
     setIsLoading(false);
     if (result.error) {
@@ -53,6 +72,24 @@ export function SettingsForm({ settings, currencies }: SettingsFormProps) {
       toast({ title: "Paramètres sauvegardés" });
       router.refresh();
     }
+  };
+
+  const handleTestNotification = () => {
+    if (!testRecipient.trim()) {
+      toast({ title: "Erreur", description: "Saisissez un numéro de test", variant: "destructive" });
+      return;
+    }
+    startTestTransition(async () => {
+      const fd = new FormData();
+      fd.set("channel", "whatsapp");
+      fd.set("recipient", testRecipient);
+      const result = await sendTestNotificationAction(fd);
+      if (result.error) {
+        toast({ title: "Test échoué", description: result.error, variant: "destructive" });
+      } else {
+        toast({ title: "Test envoyé", description: `Message de test envoyé à ${testRecipient}` });
+      }
+    });
   };
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,6 +236,149 @@ export function SettingsForm({ settings, currencies }: SettingsFormProps) {
               }
             </Button>
           </form>
+        </CardContent>
+      </Card>
+      {/* Notifications */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-blue-600" />
+            Notifications clients
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* WhatsApp */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-sm">WhatsApp Business</p>
+                <p className="text-xs text-gray-500">Notifications via Meta WhatsApp Business API</p>
+              </div>
+              <Switch checked={whatsappEnabled} onCheckedChange={setWhatsappEnabled} />
+            </div>
+            {whatsappEnabled && (
+              <div className="pl-4 border-l-2 border-blue-100 space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="whatsappApiKey">Access Token</Label>
+                  <Input
+                    id="whatsappApiKey"
+                    name="whatsappApiKey"
+                    type="password"
+                    defaultValue={settings?.whatsappApiKey ?? ""}
+                    placeholder="EAAxxxxxxxx..."
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="whatsappPhoneNumberId">Phone Number ID</Label>
+                    <Input
+                      id="whatsappPhoneNumberId"
+                      name="whatsappPhoneNumberId"
+                      defaultValue={settings?.whatsappPhoneNumberId ?? ""}
+                      placeholder="123456789..."
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="whatsappBusinessAccountId">Business Account ID</Label>
+                    <Input
+                      id="whatsappBusinessAccountId"
+                      name="whatsappBusinessAccountId"
+                      defaultValue={settings?.whatsappBusinessAccountId ?? ""}
+                      placeholder="987654321..."
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="companySenderName">Nom expéditeur</Label>
+                  <Input
+                    id="companySenderName"
+                    name="companySenderName"
+                    defaultValue={settings?.companySenderName ?? ""}
+                    placeholder="Dazzling Tailor"
+                  />
+                </div>
+                <div className="p-3 bg-blue-50 rounded-lg text-xs text-blue-700">
+                  <p className="font-medium mb-1">Sans clés API configurées :</p>
+                  <p>Les messages seront enregistrés en mode simulation (mock) et loggués côté serveur.</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* SMS */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-sm">SMS</p>
+                <p className="text-xs text-gray-500">Notifications par SMS (Twilio, etc.)</p>
+              </div>
+              <Switch checked={smsEnabled} onCheckedChange={setSmsEnabled} />
+            </div>
+            {smsEnabled && (
+              <div className="pl-4 border-l-2 border-gray-100 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="smsProvider">Fournisseur</Label>
+                    <Input
+                      id="smsProvider"
+                      name="smsProvider"
+                      defaultValue={settings?.smsProvider ?? ""}
+                      placeholder="twilio, vonage..."
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="smsApiKey">Clé API</Label>
+                    <Input
+                      id="smsApiKey"
+                      name="smsApiKey"
+                      type="password"
+                      defaultValue={settings?.smsApiKey ?? ""}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400">SMS : intégration en cours de développement</p>
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Email */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-sm">Email</p>
+              <p className="text-xs text-gray-500">Notifications par email (intégration à venir)</p>
+            </div>
+            <Switch checked={emailEnabled} onCheckedChange={setEmailEnabled} />
+          </div>
+
+          <Separator />
+
+          {/* Test */}
+          <div className="space-y-3">
+            <p className="font-medium text-sm">Tester une notification</p>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                placeholder="Numéro WhatsApp (+243...)"
+                value={testRecipient}
+                onChange={(e) => setTestRecipient(e.target.value)}
+                className="flex-1 min-w-48"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleTestNotification}
+                disabled={isTestPending}
+              >
+                {isTestPending
+                  ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  : <Send className="w-4 h-4 mr-2" />}
+                Tester
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

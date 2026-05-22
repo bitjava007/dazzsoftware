@@ -35,6 +35,15 @@ export async function upsertSettingsAction(formData: FormData) {
     defaultCurrencyId: String(formData.get("defaultCurrencyId") || "") || null,
     invoicePrefix: String(formData.get("invoicePrefix") || "FACT-"),
     receiptPrefix: String(formData.get("receiptPrefix") || "RECU-"),
+    whatsappEnabled: formData.get("whatsappEnabled") === "true",
+    whatsappApiKey: String(formData.get("whatsappApiKey") || "") || null,
+    whatsappPhoneNumberId: String(formData.get("whatsappPhoneNumberId") || "") || null,
+    whatsappBusinessAccountId: String(formData.get("whatsappBusinessAccountId") || "") || null,
+    companySenderName: String(formData.get("companySenderName") || "") || null,
+    smsEnabled: formData.get("smsEnabled") === "true",
+    smsProvider: String(formData.get("smsProvider") || "") || null,
+    smsApiKey: String(formData.get("smsApiKey") || "") || null,
+    emailEnabled: formData.get("emailEnabled") === "true",
   };
 
   try {
