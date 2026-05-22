@@ -172,7 +172,7 @@ export function ArticlesContent({ articles, articleTypes }: { articles: Article[
               </DialogContent>
             </Dialog>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -252,7 +252,7 @@ export function ArticlesContent({ articles, articleTypes }: { articles: Article[
               </DialogContent>
             </Dialog>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

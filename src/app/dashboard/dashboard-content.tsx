@@ -142,7 +142,7 @@ export function DashboardContent({ stats, currencies, defaultStart = "", default
   return (
     <div className="space-y-6">
       {/* Date Range Filter */}
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
         <DateRangeFilter
           startDate={startDate}
           endDate={endDate}

@@ -63,7 +63,7 @@ export default function ModifierClientPage({ params }: { params: Promise<{ id: s
 
   if (!client) {
     return (
-      <div className="p-6 flex items-center justify-center">
+      <div className="p-4 sm:p-6 flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
       </div>
     );

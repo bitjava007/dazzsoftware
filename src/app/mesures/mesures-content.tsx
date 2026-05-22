@@ -213,7 +213,7 @@ export function MesuresContent({ measurements, clients }: { measurements: Measur
           </DialogContent>
         </Dialog>
       </CardHeader>
-      <CardContent className="p-0">
+      <CardContent className="p-0 overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
