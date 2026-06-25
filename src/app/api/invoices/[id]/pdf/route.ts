@@ -153,11 +153,11 @@ export async function GET(
     }
 
     // ─── Company info ───────────────────────────────────────────────────────────
-    const companyName = settings?.companyName ?? "Dazzling Tailor";
+    const companyName = settings?.companyName ?? "DazzUrembo App";
     const infoX = MARGIN + (logoHeight > 0 ? 160 : 0);
     text(companyName, { x: infoX, y: y - 14, size: 14, font: fontBold, color: DARK });
     let cy = y - 30;
-    for (const line of [settings?.address, settings?.phone, settings?.email, settings?.taxNumber ? `N° Fiscal: ${settings.taxNumber}` : null].filter(Boolean) as string[]) {
+    for (const line of [settings?.address, settings?.phone, settings?.email, settings?.website, settings?.taxNumber ? `N° Fiscal: ${settings.taxNumber}` : null].filter(Boolean) as string[]) {
       text(line, { x: infoX, y: cy, size: 9, font: fontRegular, color: GRAY });
       cy -= 13;
     }
@@ -302,7 +302,7 @@ export async function GET(
 
     // ─── Footer ─────────────────────────────────────────────────────────────────
     page.drawRectangle({ x: MARGIN, y: 38, width: COL_W, height: 0.75, color: LIGHT_GRAY });
-    text(`${companyName} · Merci pour votre confiance`, {
+    text(`${settings?.appName ?? "DazzUrembo App"} · Merci pour votre confiance`, {
       x: MARGIN, y: 24, size: 8, font: fontRegular, color: GRAY,
     });
     text(`Facture générée le ${formatDateStr(new Date())}`, {

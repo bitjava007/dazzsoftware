@@ -541,11 +541,22 @@ enum InvoiceStatus {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 model Settings {
   id                          String   @id @default(uuid())
+  appName                     String   @default("DazzUrembo App") @map("app_name")
   companyName                 String   @map("company_name")
   logo                        String?
+  favicon                     String?
   address                     String?
+  city                        String?
+  country                     String?
   phone                       String?
+  whatsappNumber              String?  @map("whatsapp_number")
   email                       String?
+  website                     String?
+  slogan                      String?
+  primaryColor                String   @default("#2563eb") @map("primary_color")
+  secondaryColor              String   @default("#0f172a") @map("secondary_color")
+  buttonColor                 String   @default("#2563eb") @map("button_color")
+  sidebarColor                String   @default("#0f172a") @map("sidebar_color")
   taxNumber                   String?  @map("tax_number")
   defaultCurrencyId           String?  @map("default_currency_id")
   invoicePrefix               String   @default("FACT-") @map("invoice_prefix")
