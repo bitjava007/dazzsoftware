@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { safeDrawText } from "@/lib/pdf-text";
+
+// Buffer/pdf-lib require the Node.js runtime (not Edge).
+export const runtime = "nodejs";
 
 function formatMoney(amount: number, symbol = "") {
   return `${amount.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}${symbol ? ` ${symbol}` : ""}`;
@@ -22,8 +26,10 @@ export async function GET(
 
   const { id } = await params;
 
+  let invoice;
+  let settings;
   try {
-    const [invoice, settings] = await Promise.all([
+    [invoice, settings] = await Promise.all([
       prisma.invoice.findUnique({
         where: { id, deletedAt: null },
         include: {
@@ -57,19 +63,48 @@ export async function GET(
       }),
       prisma.settings.findFirst(),
     ]);
+  } catch (err) {
+    console.error("[invoice/pdf] database error:", err);
+    console.error((err as Error)?.stack);
+    return NextResponse.json(
+      { error: "Erreur lors de la récupération des données de la facture", detail: String(err) },
+      { status: 500 },
+    );
+  }
 
-    if (!invoice) return NextResponse.json({ error: "Facture introuvable" }, { status: 404 });
+  if (!invoice) return NextResponse.json({ error: "Facture introuvable" }, { status: 404 });
 
-    // Resolve client, orders and currency
-    const client = invoice.client;
-    const currency = invoice.currency ?? invoice.order?.currency ?? invoice.items[0]?.order.currency;
-    const currencySymbol = currency?.code ?? "";
+  // Resolve client, orders and currency
+  const client = invoice.client;
+  if (!client) {
+    return NextResponse.json(
+      { error: "Client introuvable pour cette facture (référence client manquante ou supprimée)" },
+      { status: 500 },
+    );
+  }
 
-    // Collect all orders to display (new multi-order or legacy single-order)
-    const allOrders = invoice.items.length > 0
-      ? invoice.items.map((i) => i.order)
-      : invoice.order ? [invoice.order] : [];
+  const currency = invoice.currency ?? invoice.order?.currency ?? invoice.items[0]?.order.currency;
+  if (!currency) {
+    return NextResponse.json(
+      { error: "Devise introuvable pour cette facture" },
+      { status: 500 },
+    );
+  }
+  const currencySymbol = currency.code ?? "";
 
+  // Collect all orders to display (new multi-order or legacy single-order)
+  const allOrders = invoice.items.length > 0
+    ? invoice.items.map((i) => i.order)
+    : invoice.order ? [invoice.order] : [];
+
+  if (allOrders.length === 0) {
+    return NextResponse.json(
+      { error: "Cette facture n'a aucune commande associée (impossible de générer les lignes de la facture)" },
+      { status: 500 },
+    );
+  }
+
+  try {
     // ─── Build PDF ──────────────────────────────────────────────────────────────
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage(PageSizes.A4);
@@ -87,6 +122,8 @@ export async function GET(
     const BLUE = rgb(0.13, 0.40, 0.87);
     const GREEN = rgb(0.08, 0.64, 0.26);
     const ORANGE = rgb(0.85, 0.38, 0.05);
+
+    const text = (t: string, options: Parameters<typeof page.drawText>[1]) => safeDrawText(page, t, options);
 
     let y = height - MARGIN;
 
@@ -110,16 +147,18 @@ export async function GET(
             logoHeight = iH * scale + 10;
           }
         }
-      } catch { /* skip */ }
+      } catch (logoErr) {
+        console.error("[invoice/pdf] logo fetch/embed failed (non-fatal):", logoErr);
+      }
     }
 
     // ─── Company info ───────────────────────────────────────────────────────────
     const companyName = settings?.companyName ?? "Dazzling Tailor";
     const infoX = MARGIN + (logoHeight > 0 ? 160 : 0);
-    page.drawText(companyName, { x: infoX, y: y - 14, size: 14, font: fontBold, color: DARK });
+    text(companyName, { x: infoX, y: y - 14, size: 14, font: fontBold, color: DARK });
     let cy = y - 30;
     for (const line of [settings?.address, settings?.phone, settings?.email, settings?.taxNumber ? `N° Fiscal: ${settings.taxNumber}` : null].filter(Boolean) as string[]) {
-      page.drawText(line, { x: infoX, y: cy, size: 9, font: fontRegular, color: GRAY });
+      text(line, { x: infoX, y: cy, size: 9, font: fontRegular, color: GRAY });
       cy -= 13;
     }
     y -= Math.max(logoHeight, 70);
@@ -129,7 +168,7 @@ export async function GET(
     y -= 18;
 
     // ─── FACTURE title + metadata ───────────────────────────────────────────────
-    page.drawText("FACTURE", { x: MARGIN, y, size: 22, font: fontBold, color: BLUE });
+    text("FACTURE", { x: MARGIN, y, size: 22, font: fontBold, color: BLUE });
 
     const detailsX = MARGIN + COL_W - 200;
     const orderRefs = allOrders.map((o) => o.orderNumber).join(", ");
@@ -141,19 +180,19 @@ export async function GET(
     ];
     let metaY = y;
     for (const [label, value] of metaRows) {
-      page.drawText(label, { x: detailsX, y: metaY, size: 9, font: fontBold, color: GRAY });
-      page.drawText(value, { x: detailsX + 75, y: metaY, size: 9, font: fontRegular, color: DARK });
+      text(label, { x: detailsX, y: metaY, size: 9, font: fontBold, color: GRAY });
+      text(value, { x: detailsX + 75, y: metaY, size: 9, font: fontRegular, color: DARK });
       metaY -= 14;
     }
     y -= 40;
 
     // ─── Client block ───────────────────────────────────────────────────────────
     page.drawRectangle({ x: MARGIN, y: y - 65, width: 200, height: 80, color: LIGHT_GRAY });
-    page.drawText("FACTURÉ À", { x: MARGIN + 8, y: y - 14, size: 8, font: fontBold, color: BLUE });
-    page.drawText(client.fullName, { x: MARGIN + 8, y: y - 28, size: 10, font: fontBold, color: DARK });
+    text("FACTURÉ À", { x: MARGIN + 8, y: y - 14, size: 8, font: fontBold, color: BLUE });
+    text(client.fullName, { x: MARGIN + 8, y: y - 28, size: 10, font: fontBold, color: DARK });
     let clientY = y - 42;
     for (const line of [client.phone, client.email, [client.address, client.city, client.country].filter(Boolean).join(", ") || null].filter(Boolean) as string[]) {
-      page.drawText(line, { x: MARGIN + 8, y: clientY, size: 9, font: fontRegular, color: GRAY });
+      text(line, { x: MARGIN + 8, y: clientY, size: 9, font: fontRegular, color: GRAY });
       clientY -= 13;
     }
     y -= 85;
@@ -166,7 +205,7 @@ export async function GET(
 
     page.drawRectangle({ x: MARGIN, y: y - 18, width: COL_W, height: 20, color: BLUE });
     for (const [label, x] of [["Description", colDesc + 4], ["Qté", colQty], ["Prix unit.", colUnit], ["Total", colTotal]] as const) {
-      page.drawText(label, { x, y: y - 12, size: 9, font: fontBold, color: rgb(1, 1, 1) });
+      text(label, { x, y: y - 12, size: 9, font: fontBold, color: rgb(1, 1, 1) });
     }
     y -= 22;
 
@@ -175,7 +214,7 @@ export async function GET(
       // Order header row if multiple orders
       if (allOrders.length > 1) {
         page.drawRectangle({ x: MARGIN, y: y - 14, width: COL_W, height: 16, color: rgb(0.94, 0.96, 1) });
-        page.drawText(`Commande : ${order.orderNumber}`, { x: colDesc + 4, y: y - 9, size: 8, font: fontBold, color: BLUE });
+        text(`Commande : ${order.orderNumber}`, { x: colDesc + 4, y: y - 9, size: 8, font: fontBold, color: BLUE });
         y -= 17;
       }
 
@@ -184,10 +223,10 @@ export async function GET(
         const desc = line.description ?? line.article?.name ?? "—";
         const displayDesc = desc.length > 52 ? desc.substring(0, 52) + "…" : desc;
         if (rowIdx % 2 === 1) page.drawRectangle({ x: MARGIN, y: y - 16, width: COL_W, height: 18, color: rgb(0.97, 0.97, 0.97) });
-        page.drawText(displayDesc, { x: colDesc + 4, y: y - 10, size: 9, font: fontRegular, color: DARK });
-        page.drawText(String(line.quantity), { x: colQty, y: y - 10, size: 9, font: fontRegular, color: DARK });
-        page.drawText(formatMoney(Number(line.unitPrice)), { x: colUnit, y: y - 10, size: 9, font: fontRegular, color: DARK });
-        page.drawText(formatMoney(Number(line.lineTotal)), { x: colTotal, y: y - 10, size: 9, font: fontBold, color: DARK });
+        text(displayDesc, { x: colDesc + 4, y: y - 10, size: 9, font: fontRegular, color: DARK });
+        text(String(line.quantity), { x: colQty, y: y - 10, size: 9, font: fontRegular, color: DARK });
+        text(formatMoney(Number(line.unitPrice)), { x: colUnit, y: y - 10, size: 9, font: fontRegular, color: DARK });
+        text(formatMoney(Number(line.lineTotal)), { x: colTotal, y: y - 10, size: 9, font: fontBold, color: DARK });
         y -= 19;
         rowIdx++;
       }
@@ -201,8 +240,8 @@ export async function GET(
     const valX = MARGIN + COL_W - 5;
 
     const drawRow = (label: string, value: string, bold = false, color = DARK) => {
-      page.drawText(label, { x: totalsX, y, size: 9, font: bold ? fontBold : fontRegular, color: GRAY });
-      page.drawText(value, { x: valX, y, size: 9, font: bold ? fontBold : fontRegular, color });
+      text(label, { x: totalsX, y, size: 9, font: bold ? fontBold : fontRegular, color: GRAY });
+      text(value, { x: valX, y, size: 9, font: bold ? fontBold : fontRegular, color });
       y -= 14;
     };
 
@@ -218,8 +257,8 @@ export async function GET(
     y -= 4;
 
     page.drawRectangle({ x: totalsX - 4, y: y - 18, width: 228, height: 28, color: BLUE });
-    page.drawText("TOTAL:", { x: totalsX, y: y - 10, size: 11, font: fontBold, color: rgb(1, 1, 1) });
-    page.drawText(formatMoney(Number(invoice.totalAmount), currencySymbol), {
+    text("TOTAL:", { x: totalsX, y: y - 10, size: 11, font: fontBold, color: rgb(1, 1, 1) });
+    text(formatMoney(Number(invoice.totalAmount), currencySymbol), {
       x: valX - 80, y: y - 10, size: 11, font: fontBold, color: rgb(1, 1, 1),
     });
     y -= 30;
@@ -227,15 +266,15 @@ export async function GET(
     // ─── Payments ───────────────────────────────────────────────────────────────
     const allPayments = allOrders.flatMap((o) => o.payments);
     if (allPayments.length > 0) {
-      page.drawText("Paiements reçus:", { x: MARGIN, y, size: 9, font: fontBold, color: DARK });
+      text("Paiements reçus:", { x: MARGIN, y, size: 9, font: fontBold, color: DARK });
       y -= 14;
       for (const p of allPayments) {
         if (y < 60) break;
         const method = p.paymentType.replace(/_/g, " ");
-        page.drawText(`• ${formatDateStr(p.paymentDate)} — ${method}`, {
+        text(`• ${formatDateStr(p.paymentDate)} — ${method}`, {
           x: MARGIN + 8, y, size: 8, font: fontRegular, color: GRAY,
         });
-        page.drawText(formatMoney(Number(p.amountOriginal), currencySymbol), {
+        text(formatMoney(Number(p.amountOriginal), currencySymbol), {
           x: valX - 60, y, size: 8, font: fontRegular, color: GREEN,
         });
         y -= 13;
@@ -247,8 +286,8 @@ export async function GET(
     if (y > 60) {
       const balanceDue = Number(invoice.balanceDue);
       const balColor = balanceDue > 0 ? ORANGE : GREEN;
-      page.drawText("Solde restant dû:", { x: MARGIN, y, size: 10, font: fontBold, color: DARK });
-      page.drawText(formatMoney(balanceDue, currencySymbol), {
+      text("Solde restant dû:", { x: MARGIN, y, size: 10, font: fontBold, color: DARK });
+      text(formatMoney(balanceDue, currencySymbol), {
         x: valX - 80, y, size: 11, font: fontBold, color: balColor,
       });
       y -= 24;
@@ -256,17 +295,17 @@ export async function GET(
 
     // ─── Notes ──────────────────────────────────────────────────────────────────
     if (invoice.notes && y > 60) {
-      page.drawText("Notes:", { x: MARGIN, y, size: 9, font: fontBold, color: GRAY });
+      text("Notes:", { x: MARGIN, y, size: 9, font: fontBold, color: GRAY });
       y -= 12;
-      page.drawText(invoice.notes.substring(0, 120), { x: MARGIN, y, size: 8, font: fontRegular, color: GRAY });
+      text(invoice.notes.substring(0, 120), { x: MARGIN, y, size: 8, font: fontRegular, color: GRAY });
     }
 
     // ─── Footer ─────────────────────────────────────────────────────────────────
     page.drawRectangle({ x: MARGIN, y: 38, width: COL_W, height: 0.75, color: LIGHT_GRAY });
-    page.drawText(`${companyName} · Merci pour votre confiance`, {
+    text(`${companyName} · Merci pour votre confiance`, {
       x: MARGIN, y: 24, size: 8, font: fontRegular, color: GRAY,
     });
-    page.drawText(`Facture générée le ${formatDateStr(new Date())}`, {
+    text(`Facture générée le ${formatDateStr(new Date())}`, {
       x: MARGIN + COL_W - 140, y: 24, size: 8, font: fontRegular, color: GRAY,
     });
 
@@ -281,7 +320,11 @@ export async function GET(
       },
     });
   } catch (err) {
-    console.error("[invoice/pdf] error:", err);
-    return NextResponse.json({ error: "Erreur lors de la génération du PDF" }, { status: 500 });
+    console.error("[invoice/pdf] PDF generation error:", err);
+    console.error((err as Error)?.stack);
+    return NextResponse.json(
+      { error: "Erreur lors de la génération du PDF", detail: String(err) },
+      { status: 500 },
+    );
   }
 }
