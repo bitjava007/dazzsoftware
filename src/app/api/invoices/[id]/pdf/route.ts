@@ -1,14 +1,48 @@
 import { NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib";
+import { PDFDocument, rgb, PageSizes, type Color } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { safeDrawText, hexToRgbColor } from "@/lib/pdf-text";
+import {
+  safeDrawText,
+  drawTrackedText,
+  drawRightAlignedText,
+  drawTrackedRightAlignedText,
+} from "@/lib/pdf-text";
+import { loadInvoiceFonts } from "@/lib/invoice-fonts";
 
 // Buffer/pdf-lib require the Node.js runtime (not Edge).
 export const runtime = "nodejs";
 
+const hex = (h: string): Color => {
+  const n = h.replace("#", "");
+  return rgb(
+    parseInt(n.slice(0, 2), 16) / 255,
+    parseInt(n.slice(2, 4), 16) / 255,
+    parseInt(n.slice(4, 6), 16) / 255,
+  );
+};
+
+const INK = hex("#1c1b22");
+const SECONDARY = hex("#8a8794");
+const RULE = hex("#e9e6e0");
+const GOLD = hex("#b08d57");
+const ACCENT_BG = hex("#f6efe4");
+const TOTAL_BAND = hex("#2a2530");
+const DUE = hex("#b0512f");
+const RECEIVED = hex("#3f7d5c");
+const WHITE = rgb(1, 1, 1);
+const CREAM = hex("#f1ece2");
+
+const PAYMENT_TYPE_LABELS: Record<string, string> = {
+  acompte_initial: "Acompte initial",
+  acompte: "Acompte",
+  paiement_final: "Paiement final",
+  bonus: "Bonus",
+};
+
 function formatMoney(amount: number, symbol = "") {
-  return `${amount.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}${symbol ? ` ${symbol}` : ""}`;
+  const formatted = amount.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return symbol ? `${formatted} ${symbol}` : formatted;
 }
 
 function formatDateStr(date: Date | null | undefined) {
@@ -110,26 +144,25 @@ export async function GET(
     const page = pdfDoc.addPage(PageSizes.A4);
     const { width, height } = page.getSize();
 
-    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const { serifBold, serifItalic, sansRegular, sansMedium } = await loadInvoiceFonts(pdfDoc);
 
     const MARGIN = 50;
     const COL_W = width - MARGIN * 2;
-
-    const DARK = rgb(0.1, 0.1, 0.1);
-    const GRAY = rgb(0.45, 0.45, 0.45);
-    const LIGHT_GRAY = rgb(0.92, 0.92, 0.92);
-    const BLUE = hexToRgbColor(settings?.primaryColor);
-    const GREEN = rgb(0.08, 0.64, 0.26);
-    const ORANGE = rgb(0.85, 0.38, 0.05);
+    // Single right edge shared by every right-aligned element on the page —
+    // metadata, table columns, totals, payments and the balance box all line up.
+    const RIGHT_EDGE = MARGIN + COL_W;
+    // Amounts are inset 14pt so boxed totals (which have their own padding)
+    // line up exactly with the unboxed subtotal/payment rows.
+    const AMOUNT_RIGHT = RIGHT_EDGE - 14;
 
     const text = (t: string, options: Parameters<typeof page.drawText>[1]) => safeDrawText(page, t, options);
 
     let y = height - MARGIN;
 
-    // ─── Logo ──────────────────────────────────────────────────────────────────
+    // ─── Header: logo + brand left, contact right ──────────────────────────────
+    const LOGO_BOX = 46;
+    let brandX = MARGIN;
     const logoUrl = settings?.logo;
-    let logoHeight = 0;
     if (logoUrl) {
       try {
         const resp = await fetch(logoUrl.split("?")[0]);
@@ -140,11 +173,16 @@ export async function GET(
           if (ct.includes("png")) img = await pdfDoc.embedPng(logoBytes);
           else if (ct.includes("jpeg") || ct.includes("jpg")) img = await pdfDoc.embedJpg(logoBytes);
           if (img) {
-            const maxH = 60;
             const { width: iW, height: iH } = img.scale(1);
-            const scale = Math.min(maxH / iH, 140 / iW);
-            page.drawImage(img, { x: MARGIN, y: y - iH * scale, width: iW * scale, height: iH * scale });
-            logoHeight = iH * scale + 10;
+            const scale = Math.min(LOGO_BOX / iW, LOGO_BOX / iH);
+            const dW = iW * scale, dH = iH * scale;
+            page.drawImage(img, {
+              x: MARGIN + (LOGO_BOX - dW) / 2,
+              y: y - LOGO_BOX + (LOGO_BOX - dH) / 2,
+              width: dW,
+              height: dH,
+            });
+            brandX = MARGIN + LOGO_BOX + 14;
           }
         }
       } catch (logoErr) {
@@ -152,157 +190,170 @@ export async function GET(
       }
     }
 
-    // ─── Company info ───────────────────────────────────────────────────────────
     const companyName = settings?.companyName ?? "DazzUrembo App";
-    const infoX = MARGIN + (logoHeight > 0 ? 160 : 0);
-    text(companyName, { x: infoX, y: y - 14, size: 14, font: fontBold, color: DARK });
-    let cy = y - 30;
-    for (const line of [settings?.address, settings?.phone, settings?.email, settings?.website, settings?.taxNumber ? `N° Fiscal: ${settings.taxNumber}` : null].filter(Boolean) as string[]) {
-      text(line, { x: infoX, y: cy, size: 9, font: fontRegular, color: GRAY });
-      cy -= 13;
+    const slogan = settings?.slogan || "Where African heritage meets modern elegance";
+    drawTrackedText(page, companyName.toUpperCase(), brandX, y - 16, { font: serifBold, size: 18, color: INK, tracking: 1.2 });
+    text(slogan, { x: brandX, y: y - 33, size: 9.5, font: serifItalic, color: GOLD });
+
+    const contactLines = [
+      settings?.address,
+      settings?.phone,
+      settings?.email,
+      settings?.website,
+      settings?.taxNumber ? `N° Fiscal: ${settings.taxNumber}` : null,
+    ].filter(Boolean) as string[];
+    let cy = y - 6;
+    for (const line of contactLines) {
+      drawRightAlignedText(page, line, RIGHT_EDGE, cy, { font: sansRegular, size: 9, color: SECONDARY });
+      cy -= 12.5;
     }
-    y -= Math.max(logoHeight, 70);
+    y -= 56;
 
-    // ─── Separator ─────────────────────────────────────────────────────────────
-    page.drawRectangle({ x: MARGIN, y: y - 1, width: COL_W, height: 1, color: BLUE });
-    y -= 18;
+    // ─── Gold gradient rule ─────────────────────────────────────────────────────
+    const steps = 80;
+    for (let i = 0; i < steps; i++) {
+      const t = i / (steps - 1);
+      const edge = Math.min(t, 1 - t) * 2.4;
+      const a = Math.min(1, edge);
+      const r = 1 - a * (1 - 0.69);
+      const g = 1 - a * (1 - 0.55);
+      const b = 1 - a * (1 - 0.34);
+      page.drawRectangle({ x: MARGIN + (COL_W / steps) * i, y: y - 1, width: COL_W / steps + 0.5, height: 1.6, color: rgb(r, g, b) });
+    }
+    y -= 34;
 
-    // ─── FACTURE title + metadata ───────────────────────────────────────────────
-    text("FACTURE", { x: MARGIN, y, size: 22, font: fontBold, color: DARK });
+    // ─── "Facture" title + metadata ─────────────────────────────────────────────
+    text("Facture", { x: MARGIN, y: y - 28, size: 34, font: serifBold, color: INK });
 
-    const detailsX = MARGIN + COL_W - 200;
     const orderRefs = allOrders.map((o) => o.orderNumber).join(", ");
     const metaRows: [string, string][] = [
-      ["N° Facture:", invoice.invoiceNumber],
-      ["Date:", formatDateStr(invoice.issueDate)],
-      ["Commande(s):", orderRefs || "—"],
-      ["Devise:", currencySymbol],
+      ["N° Facture", invoice.invoiceNumber],
+      ["Date", formatDateStr(invoice.issueDate)],
+      ["Commande", orderRefs || "—"],
+      ["Devise", currencySymbol],
     ];
-    let metaY = y;
+    let metaY = y - 4;
     for (const [label, value] of metaRows) {
-      text(label, { x: detailsX, y: metaY, size: 9, font: fontBold, color: GRAY });
-      text(value, { x: detailsX + 75, y: metaY, size: 9, font: fontRegular, color: DARK });
-      metaY -= 14;
+      drawTrackedRightAlignedText(page, label.toUpperCase(), RIGHT_EDGE, metaY, { font: sansMedium, size: 7.5, color: SECONDARY, tracking: 0.8 });
+      drawRightAlignedText(page, value, RIGHT_EDGE, metaY - 12, { font: sansRegular, size: 10, color: INK });
+      metaY -= 28;
     }
-    y -= 40;
+    y -= 58;
 
-    // ─── Client block ───────────────────────────────────────────────────────────
-    text("FACTURÉ À", { x: MARGIN, y: y - 4, size: 8, font: fontBold, color: GRAY });
-    text(client.fullName, { x: MARGIN, y: y - 19, size: 11, font: fontBold, color: DARK });
-    let clientY = y - 34;
+    // ─── Facturé à ───────────────────────────────────────────────────────────────
+    drawTrackedText(page, "FACTURÉ À", MARGIN, y, { font: sansMedium, size: 7.5, color: GOLD, tracking: 1.2 });
+    text(client.fullName, { x: MARGIN, y: y - 18, size: 13, font: serifBold, color: INK });
+    let clientY = y - 33;
     for (const line of [client.phone, client.email, [client.address, client.city, client.country].filter(Boolean).join(", ") || null].filter(Boolean) as string[]) {
-      text(line, { x: MARGIN, y: clientY, size: 9, font: fontRegular, color: GRAY });
+      text(line, { x: MARGIN, y: clientY, size: 9, font: sansRegular, color: SECONDARY });
       clientY -= 13;
     }
-    y -= 80;
+    y -= 75;
 
     // ─── Line items table ───────────────────────────────────────────────────────
     const colDesc = MARGIN;
-    const colQty = MARGIN + COL_W * 0.52;
-    const colUnit = MARGIN + COL_W * 0.67;
-    const colTotal = MARGIN + COL_W * 0.84;
+    const colQty = MARGIN + COL_W * 0.55;
+    const colUnit = MARGIN + COL_W * 0.73;
 
-    for (const [label, x] of [["Description", colDesc], ["Qté", colQty], ["Prix unit.", colUnit], ["Total", colTotal]] as const) {
-      text(label.toUpperCase(), { x, y: y - 12, size: 8, font: fontBold, color: BLUE });
-    }
-    page.drawRectangle({ x: MARGIN, y: y - 18, width: COL_W, height: 1, color: BLUE });
-    y -= 22;
+    drawTrackedText(page, "DESCRIPTION", colDesc, y, { font: sansMedium, size: 7.5, color: SECONDARY, tracking: 0.8 });
+    drawTrackedRightAlignedText(page, "QTÉ", colQty + 18, y, { font: sansMedium, size: 7.5, color: SECONDARY, tracking: 0.8 });
+    drawTrackedRightAlignedText(page, "PRIX UNIT.", colUnit + 30, y, { font: sansMedium, size: 7.5, color: SECONDARY, tracking: 0.8 });
+    drawTrackedRightAlignedText(page, "TOTAL", RIGHT_EDGE, y, { font: sansMedium, size: 7.5, color: SECONDARY, tracking: 0.8 });
+    y -= 10;
+    page.drawRectangle({ x: MARGIN, y, width: COL_W, height: 0.75, color: RULE });
+    y -= 20;
 
     for (const order of allOrders) {
-      // Order header row if multiple orders
       if (allOrders.length > 1) {
-        text(`COMMANDE : ${order.orderNumber}`, { x: colDesc, y: y - 9, size: 8, font: fontBold, color: BLUE });
-        y -= 17;
+        drawTrackedText(page, `COMMANDE : ${order.orderNumber}`, colDesc, y, { font: sansMedium, size: 8, color: GOLD, tracking: 0.6 });
+        y -= 20;
       }
 
       for (const line of order.lines) {
-        if (y < 150) break;
+        if (y < 260) break;
         const desc = line.description ?? line.article?.name ?? "—";
         const displayDesc = desc.length > 52 ? desc.substring(0, 52) + "…" : desc;
-        text(displayDesc, { x: colDesc, y: y - 10, size: 9, font: fontRegular, color: DARK });
-        text(String(line.quantity), { x: colQty, y: y - 10, size: 9, font: fontRegular, color: DARK });
-        text(formatMoney(Number(line.unitPrice)), { x: colUnit, y: y - 10, size: 9, font: fontRegular, color: DARK });
-        text(formatMoney(Number(line.lineTotal)), { x: colTotal, y: y - 10, size: 9, font: fontBold, color: DARK });
-        y -= 17;
-        page.drawRectangle({ x: MARGIN, y: y + 3, width: COL_W, height: 0.5, color: LIGHT_GRAY });
-        y -= 2;
+        text(displayDesc, { x: colDesc, y, size: 10, font: sansRegular, color: INK });
+        drawRightAlignedText(page, String(line.quantity), colQty + 18, y, { font: sansRegular, size: 10, color: INK });
+        drawRightAlignedText(page, formatMoney(Number(line.unitPrice)), colUnit + 30, y, { font: sansRegular, size: 10, color: INK });
+        drawRightAlignedText(page, formatMoney(Number(line.lineTotal)), RIGHT_EDGE, y, { font: sansMedium, size: 10, color: INK });
+        y -= 22;
+        page.drawRectangle({ x: MARGIN, y: y + 8, width: COL_W, height: 0.5, color: RULE });
       }
     }
+    y -= 10;
 
-    y -= 14;
-
-    // ─── Totals ─────────────────────────────────────────────────────────────────
-    const totalsX = MARGIN + COL_W - 220;
-    const valX = MARGIN + COL_W - 5;
-
-    const drawRow = (label: string, value: string, bold = false, color = DARK) => {
-      text(label, { x: totalsX, y, size: 9, font: bold ? fontBold : fontRegular, color: GRAY });
-      text(value, { x: valX, y, size: 9, font: bold ? fontBold : fontRegular, color });
-      y -= 14;
-    };
-
+    // ─── Totals ──────────────────────────────────────────────────────────────────
     const subtotal = Number(invoice.subtotal ?? invoice.totalAmount);
     const discount = Number(invoice.discount ?? 0);
     const bonus = Number(invoice.bonus ?? 0);
+    const totalAmount = Number(invoice.totalAmount);
 
-    drawRow("Sous-total:", formatMoney(subtotal, currencySymbol));
-    if (discount > 0) drawRow("Remise:", `- ${formatMoney(discount, currencySymbol)}`);
-    if (bonus > 0) drawRow("Bonus:", `- ${formatMoney(bonus, currencySymbol)}`);
+    drawRightAlignedText(page, "Sous-total", AMOUNT_RIGHT - 110, y, { font: sansRegular, size: 9.5, color: SECONDARY });
+    drawRightAlignedText(page, formatMoney(subtotal, currencySymbol), AMOUNT_RIGHT, y, { font: sansRegular, size: 9.5, color: INK });
+    y -= 18;
+    if (discount > 0) {
+      drawRightAlignedText(page, "Remise", AMOUNT_RIGHT - 110, y, { font: sansRegular, size: 9.5, color: SECONDARY });
+      drawRightAlignedText(page, `− ${formatMoney(discount, currencySymbol)}`, AMOUNT_RIGHT, y, { font: sansRegular, size: 9.5, color: DUE });
+      y -= 18;
+    }
+    if (bonus > 0) {
+      drawRightAlignedText(page, "Bonus", AMOUNT_RIGHT - 110, y, { font: sansRegular, size: 9.5, color: SECONDARY });
+      drawRightAlignedText(page, `− ${formatMoney(bonus, currencySymbol)}`, AMOUNT_RIGHT, y, { font: sansRegular, size: 9.5, color: RECEIVED });
+      y -= 18;
+    }
+    y -= 12;
 
-    page.drawRectangle({ x: totalsX, y: y + 11, width: 220, height: 1, color: DARK });
-    y -= 10;
+    page.drawRectangle({ x: RIGHT_EDGE - 220, y: y - 12, width: 220, height: 34, color: TOTAL_BAND });
+    drawTrackedText(page, "TOTAL", RIGHT_EDGE - 206, y + 1, { font: sansMedium, size: 8.5, color: CREAM, tracking: 1 });
+    drawRightAlignedText(page, formatMoney(totalAmount, currencySymbol), AMOUNT_RIGHT, y + 1, { font: serifBold, size: 15, color: WHITE });
+    y -= 50;
 
-    text("TOTAL", { x: totalsX, y, size: 9, font: fontBold, color: GRAY });
-    text(formatMoney(Number(invoice.totalAmount), currencySymbol), {
-      x: valX - 110, y: y - 2, size: 15, font: fontBold, color: BLUE,
-    });
-    y -= 26;
-
-    // ─── Payments ───────────────────────────────────────────────────────────────
+    // ─── Payments — kept in the same right-aligned column as the totals ────────
     const allPayments = allOrders.flatMap((o) => o.payments);
-    if (allPayments.length > 0) {
-      text("Paiements reçus:", { x: MARGIN, y, size: 9, font: fontBold, color: DARK });
-      y -= 14;
+    if (allPayments.length > 0 && y > 140) {
+      drawTrackedRightAlignedText(page, "PAIEMENTS REÇUS", RIGHT_EDGE, y, { font: sansMedium, size: 7.5, color: SECONDARY, tracking: 0.8 });
+      y -= 18;
       for (const p of allPayments) {
-        if (y < 60) break;
-        const method = p.paymentType.replace(/_/g, " ");
-        text(`• ${formatDateStr(p.paymentDate)} — ${method}`, {
-          x: MARGIN + 8, y, size: 8, font: fontRegular, color: GRAY,
-        });
-        text(formatMoney(Number(p.amountOriginal), currencySymbol), {
-          x: valX - 60, y, size: 8, font: fontRegular, color: GREEN,
-        });
-        y -= 13;
+        if (y < 110) break;
+        const label = PAYMENT_TYPE_LABELS[p.paymentType] ?? p.paymentType.replace(/_/g, " ");
+        drawRightAlignedText(page, `${formatDateStr(p.paymentDate)} · ${label}`, AMOUNT_RIGHT - 110, y, { font: sansRegular, size: 9.5, color: SECONDARY });
+        drawRightAlignedText(page, `− ${formatMoney(Number(p.amountOriginal), currencySymbol)}`, AMOUNT_RIGHT, y, { font: sansMedium, size: 9.5, color: RECEIVED });
+        y -= 18;
       }
-      y -= 6;
     }
+    y -= 8;
 
-    // ─── Balance ────────────────────────────────────────────────────────────────
-    if (y > 60) {
-      const balanceDue = Number(invoice.balanceDue);
-      const balColor = balanceDue > 0 ? ORANGE : GREEN;
-      text("Solde restant dû:", { x: MARGIN, y, size: 10, font: fontBold, color: DARK });
-      text(formatMoney(balanceDue, currencySymbol), {
-        x: valX - 80, y, size: 11, font: fontBold, color: balColor,
-      });
-      y -= 24;
-    }
+    // ─── Solde restant dû (computed live from the payments above — never
+    // trust invoice.balanceDue, which is frozen at invoice-creation time) ───────
+    const amountPaid = allPayments.reduce((s, p) => s + Number(p.amountOriginal), 0);
+    const balanceDue = Math.max(0, totalAmount - amountPaid);
+    const isSettled = balanceDue <= 0;
+    const statusColor = isSettled ? RECEIVED : DUE;
+    const balanceLabel = isSettled ? "SOLDÉE" : "SOLDE RESTANT DÛ";
+
+    const boxW = 220, boxH = 36, boxX = RIGHT_EDGE - boxW, boxY = y - boxH;
+    page.drawRectangle({ x: boxX, y: boxY, width: boxW, height: boxH, color: ACCENT_BG });
+    page.drawRectangle({ x: boxX, y: boxY, width: 3, height: boxH, color: statusColor });
+    drawTrackedText(page, balanceLabel, boxX + 16, boxY + boxH / 2 - 3, { font: sansMedium, size: 8, color: statusColor, tracking: 0.8 });
+    drawRightAlignedText(page, formatMoney(balanceDue, currencySymbol), AMOUNT_RIGHT, boxY + boxH / 2 - 5, { font: serifBold, size: 14, color: statusColor });
 
     // ─── Notes ──────────────────────────────────────────────────────────────────
-    if (invoice.notes && y > 60) {
-      text("Notes:", { x: MARGIN, y, size: 9, font: fontBold, color: GRAY });
-      y -= 12;
-      text(invoice.notes.substring(0, 120), { x: MARGIN, y, size: 8, font: fontRegular, color: GRAY });
+    if (invoice.notes && boxY - 30 > 60) {
+      text("Notes:", { x: MARGIN, y: boxY - 22, size: 9, font: sansMedium, color: SECONDARY });
+      text(invoice.notes.substring(0, 120), { x: MARGIN, y: boxY - 34, size: 8.5, font: sansRegular, color: SECONDARY });
     }
 
-    // ─── Footer ─────────────────────────────────────────────────────────────────
-    page.drawRectangle({ x: MARGIN, y: 38, width: COL_W, height: 0.75, color: LIGHT_GRAY });
-    text(`${settings?.appName ?? "DazzUrembo App"} · Merci pour votre confiance`, {
-      x: MARGIN, y: 24, size: 8, font: fontRegular, color: GRAY,
-    });
-    text(`Facture générée le ${formatDateStr(new Date())}`, {
-      x: MARGIN + COL_W - 140, y: 24, size: 8, font: fontRegular, color: GRAY,
-    });
+    // ─── Footer (anchored to bottom) ────────────────────────────────────────────
+    page.drawRectangle({ x: MARGIN, y: 40, width: COL_W, height: 0.75, color: RULE });
+    text("Merci de votre confiance.", { x: MARGIN, y: 24, size: 8.5, font: serifItalic, color: SECONDARY });
+    drawRightAlignedText(
+      page,
+      `Facture générée le ${formatDateStr(new Date())} · ${settings?.appName ?? "DazzUrembo App"}`,
+      RIGHT_EDGE,
+      24,
+      { font: sansRegular, size: 8, color: SECONDARY },
+    );
 
     const pdfBytes = await pdfDoc.save();
     const buffer = Buffer.from(pdfBytes);
