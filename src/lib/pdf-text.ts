@@ -1,4 +1,4 @@
-import { rgb, type Color, type PDFPage } from "pdf-lib";
+import { rgb, type Color, type PDFFont, type PDFPage } from "pdf-lib";
 
 /**
  * pdf-lib's StandardFonts (Helvetica/HelveticaBold) are encoded with WinAnsi
@@ -58,4 +58,47 @@ export function safeDrawText(
     // rejects gets replaced rather than crashing the PDF generation.
     page.drawText(sanitized.replace(/[^\x20-\x7e]/g, "?"), options);
   }
+}
+
+interface TrackedTextOptions {
+  font: PDFFont;
+  size: number;
+  color?: Color;
+  tracking?: number;
+}
+
+/** pdf-lib has no native letter-spacing; this advances each glyph manually. */
+export function trackedTextWidth(text: string, font: PDFFont, size: number, tracking = 0): number {
+  const sanitized = sanitizeForPdf(text);
+  let width = 0;
+  for (const char of sanitized) {
+    width += font.widthOfTextAtSize(char, size) + tracking;
+  }
+  return width - tracking;
+}
+
+export function drawTrackedText(page: PDFPage, text: string, x: number, y: number, options: TrackedTextOptions) {
+  const sanitized = sanitizeForPdf(text);
+  let cx = x;
+  for (const char of sanitized) {
+    safeDrawText(page, char, { x: cx, y, size: options.size, font: options.font, color: options.color });
+    cx += options.font.widthOfTextAtSize(char, options.size) + (options.tracking ?? 0);
+  }
+}
+
+export function drawRightAlignedText(
+  page: PDFPage,
+  text: string,
+  rightX: number,
+  y: number,
+  options: { font: PDFFont; size: number; color?: Color },
+) {
+  const sanitized = sanitizeForPdf(text);
+  const width = options.font.widthOfTextAtSize(sanitized, options.size);
+  safeDrawText(page, text, { x: rightX - width, y, size: options.size, font: options.font, color: options.color });
+}
+
+export function drawTrackedRightAlignedText(page: PDFPage, text: string, rightX: number, y: number, options: TrackedTextOptions) {
+  const width = trackedTextWidth(text, options.font, options.size, options.tracking ?? 0);
+  drawTrackedText(page, text, rightX - width, y, options);
 }
