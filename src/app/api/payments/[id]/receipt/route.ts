@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { safeDrawText } from "@/lib/pdf-text";
+import { safeDrawText, hexToRgbColor } from "@/lib/pdf-text";
 
 export const runtime = "nodejs";
 
@@ -116,11 +116,10 @@ export async function GET(
   const M = 50;
   const CW = width - M * 2;
 
-  const BLACK = rgb(0, 0, 0);
   const DARK = rgb(0.1, 0.1, 0.1);
   const GRAY = rgb(0.45, 0.45, 0.45);
   const LGRAY = rgb(0.92, 0.92, 0.92);
-  const BLUE = rgb(0.13, 0.40, 0.87);
+  const BLUE = hexToRgbColor(settings?.primaryColor);
   const GREEN = rgb(0.08, 0.64, 0.26);
   const ORANGE = rgb(0.85, 0.38, 0.05);
 
@@ -163,12 +162,12 @@ export async function GET(
   }
   y -= Math.max(logoHeight, 65);
 
-  // ─── Blue separator ────────────────────────────────────────────────────────
-  page.drawRectangle({ x: M, y: y - 2, width: CW, height: 1.5, color: BLUE });
+  // ─── Separator ─────────────────────────────────────────────────────────────
+  page.drawRectangle({ x: M, y: y - 1, width: CW, height: 1, color: BLUE });
   y -= 18;
 
   // ─── Title + receipt metadata ──────────────────────────────────────────────
-  text("REÇU DE PAIEMENT", { x: M, y, size: 20, font: fontB, color: BLUE });
+  text("REÇU DE PAIEMENT", { x: M, y, size: 20, font: fontB, color: DARK });
 
   const metaX = M + CW - 210;
   let mY = y;
@@ -185,46 +184,45 @@ export async function GET(
   y -= 45;
 
   // ─── Client block ──────────────────────────────────────────────────────────
-  page.drawRectangle({ x: M, y: y - 55, width: 190, height: 68, color: LGRAY });
-  text("CLIENT", { x: M + 8, y: y - 13, size: 8, font: fontB, color: BLUE });
-  text(client.fullName, { x: M + 8, y: y - 26, size: 10, font: fontB, color: DARK });
-  let clY = y - 40;
+  text("CLIENT", { x: M, y: y - 3, size: 8, font: fontB, color: GRAY });
+  text(client.fullName, { x: M, y: y - 18, size: 10, font: fontB, color: DARK });
+  let clY = y - 32;
   for (const line of [client.phone, client.email].filter(Boolean) as string[]) {
-    text(line, { x: M + 8, y: clY, size: 9, font: fontR, color: GRAY });
+    text(line, { x: M, y: clY, size: 9, font: fontR, color: GRAY });
     clY -= 13;
   }
 
   // ─── Order number block ────────────────────────────────────────────────────
-  const orderX = M + 210;
-  page.drawRectangle({ x: orderX, y: y - 55, width: CW - 210, height: 68, color: LGRAY });
-  text("COMMANDE", { x: orderX + 8, y: y - 13, size: 8, font: fontB, color: BLUE });
-  text(order.orderNumber, { x: orderX + 8, y: y - 26, size: 10, font: fontB, color: DARK });
-  text(`Total commande: ${fmt(totalOrder, sym)}`, { x: orderX + 8, y: y - 40, size: 9, font: fontR, color: GRAY });
-  y -= 75;
+  const orderX = M + 230;
+  page.drawRectangle({ x: orderX - 20, y: y - 55, width: 0.5, height: 60, color: LGRAY });
+  text("COMMANDE", { x: orderX, y: y - 3, size: 8, font: fontB, color: GRAY });
+  text(order.orderNumber, { x: orderX, y: y - 18, size: 10, font: fontB, color: DARK });
+  text(`Total commande: ${fmt(totalOrder, sym)}`, { x: orderX, y: y - 32, size: 9, font: fontR, color: GRAY });
+  y -= 65;
 
   // ─── Articles table ────────────────────────────────────────────────────────
   if (order.lines.length > 0) {
     const colD = M, colQ = M + CW * 0.56, colU = M + CW * 0.70, colT = M + CW * 0.87;
 
-    page.drawRectangle({ x: M, y: y - 18, width: CW, height: 20, color: BLUE });
-    for (const [label, x] of [["Article / Description", colD + 4], ["Qté", colQ], ["P.U.", colU], ["Total", colT]] as const) {
-      text(label, { x, y: y - 12, size: 8, font: fontB, color: rgb(1, 1, 1) });
+    for (const [label, x] of [["Article / Description", colD], ["Qté", colQ], ["P.U.", colU], ["Total", colT]] as const) {
+      text(label.toUpperCase(), { x, y: y - 12, size: 7, font: fontB, color: BLUE });
     }
+    page.drawRectangle({ x: M, y: y - 18, width: CW, height: 1, color: BLUE });
     y -= 22;
 
     for (let i = 0; i < order.lines.length && y > 160; i++) {
       const line = order.lines[i];
       const desc = line.description ?? line.article?.name ?? "—";
       const displayDesc = desc.length > 50 ? desc.substring(0, 50) + "…" : desc;
-      if (i % 2 === 1) page.drawRectangle({ x: M, y: y - 15, width: CW, height: 17, color: rgb(0.97, 0.97, 0.97) });
-      text(displayDesc, { x: colD + 4, y: y - 10, size: 8, font: fontR, color: DARK });
+      text(displayDesc, { x: colD, y: y - 10, size: 8, font: fontR, color: DARK });
       text(String(line.quantity), { x: colQ, y: y - 10, size: 8, font: fontR, color: DARK });
       text(fmt(Number(line.unitPrice)), { x: colU, y: y - 10, size: 8, font: fontR, color: DARK });
       text(fmt(Number(line.lineTotal)), { x: colT, y: y - 10, size: 8, font: fontB, color: DARK });
-      y -= 18;
+      y -= 16;
+      page.drawRectangle({ x: M, y: y + 3, width: CW, height: 0.5, color: LGRAY });
+      y -= 2;
     }
-    page.drawRectangle({ x: M, y: y, width: CW, height: 1, color: BLUE });
-    y -= 14;
+    y -= 12;
   }
 
   // ─── Payment details ───────────────────────────────────────────────────────
@@ -249,11 +247,12 @@ export async function GET(
 
   drawRow("Déjà payé avant:", fmt(paidBefore, sym));
 
-  // Blue box for main payment amount
-  page.drawRectangle({ x: tX - 4, y: y - 18, width: 238, height: 26, color: BLUE });
-  text("CE PAIEMENT:", { x: tX, y: y - 10, size: 10, font: fontB, color: rgb(1, 1, 1) });
-  text(fmt(thisAmount, sym), { x: vX - 70, y: y - 10, size: 10, font: fontB, color: rgb(1, 1, 1) });
-  y -= 30;
+  page.drawRectangle({ x: tX, y: y + 11, width: 230, height: 1, color: DARK });
+  y -= 10;
+
+  text("CE PAIEMENT", { x: tX, y, size: 9, font: fontB, color: GRAY });
+  text(fmt(thisAmount, sym), { x: vX - 100, y: y - 2, size: 14, font: fontB, color: BLUE });
+  y -= 26;
 
   page.drawRectangle({ x: tX, y: y + 10, width: 230, height: 0.75, color: LGRAY });
   y -= 4;

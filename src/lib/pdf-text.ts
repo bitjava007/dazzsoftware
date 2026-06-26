@@ -1,4 +1,4 @@
-import type { PDFPage } from "pdf-lib";
+import { rgb, type Color, type PDFPage } from "pdf-lib";
 
 /**
  * pdf-lib's StandardFonts (Helvetica/HelveticaBold) are encoded with WinAnsi
@@ -33,6 +33,16 @@ export function sanitizeForPdf(value: unknown): string {
     out += WINANSI_REPLACEMENTS[char] ?? char;
   }
   return out;
+}
+
+export function hexToRgbColor(hex: string | null | undefined): Color {
+  const normalized = (hex ?? "").replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return rgb(0.13, 0.4, 0.87);
+
+  const r = parseInt(normalized.slice(0, 2), 16) / 255;
+  const g = parseInt(normalized.slice(2, 4), 16) / 255;
+  const b = parseInt(normalized.slice(4, 6), 16) / 255;
+  return rgb(r, g, b);
 }
 
 export function safeDrawText(

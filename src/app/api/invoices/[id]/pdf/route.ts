@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { safeDrawText } from "@/lib/pdf-text";
+import { safeDrawText, hexToRgbColor } from "@/lib/pdf-text";
 
 // Buffer/pdf-lib require the Node.js runtime (not Edge).
 export const runtime = "nodejs";
@@ -119,7 +119,7 @@ export async function GET(
     const DARK = rgb(0.1, 0.1, 0.1);
     const GRAY = rgb(0.45, 0.45, 0.45);
     const LIGHT_GRAY = rgb(0.92, 0.92, 0.92);
-    const BLUE = rgb(0.13, 0.40, 0.87);
+    const BLUE = hexToRgbColor(settings?.primaryColor);
     const GREEN = rgb(0.08, 0.64, 0.26);
     const ORANGE = rgb(0.85, 0.38, 0.05);
 
@@ -164,11 +164,11 @@ export async function GET(
     y -= Math.max(logoHeight, 70);
 
     // ─── Separator ─────────────────────────────────────────────────────────────
-    page.drawRectangle({ x: MARGIN, y: y - 2, width: COL_W, height: 1.5, color: BLUE });
+    page.drawRectangle({ x: MARGIN, y: y - 1, width: COL_W, height: 1, color: BLUE });
     y -= 18;
 
     // ─── FACTURE title + metadata ───────────────────────────────────────────────
-    text("FACTURE", { x: MARGIN, y, size: 22, font: fontBold, color: BLUE });
+    text("FACTURE", { x: MARGIN, y, size: 22, font: fontBold, color: DARK });
 
     const detailsX = MARGIN + COL_W - 200;
     const orderRefs = allOrders.map((o) => o.orderNumber).join(", ");
@@ -187,15 +187,14 @@ export async function GET(
     y -= 40;
 
     // ─── Client block ───────────────────────────────────────────────────────────
-    page.drawRectangle({ x: MARGIN, y: y - 65, width: 200, height: 80, color: LIGHT_GRAY });
-    text("FACTURÉ À", { x: MARGIN + 8, y: y - 14, size: 8, font: fontBold, color: BLUE });
-    text(client.fullName, { x: MARGIN + 8, y: y - 28, size: 10, font: fontBold, color: DARK });
-    let clientY = y - 42;
+    text("FACTURÉ À", { x: MARGIN, y: y - 4, size: 8, font: fontBold, color: GRAY });
+    text(client.fullName, { x: MARGIN, y: y - 19, size: 11, font: fontBold, color: DARK });
+    let clientY = y - 34;
     for (const line of [client.phone, client.email, [client.address, client.city, client.country].filter(Boolean).join(", ") || null].filter(Boolean) as string[]) {
-      text(line, { x: MARGIN + 8, y: clientY, size: 9, font: fontRegular, color: GRAY });
+      text(line, { x: MARGIN, y: clientY, size: 9, font: fontRegular, color: GRAY });
       clientY -= 13;
     }
-    y -= 85;
+    y -= 80;
 
     // ─── Line items table ───────────────────────────────────────────────────────
     const colDesc = MARGIN;
@@ -203,18 +202,16 @@ export async function GET(
     const colUnit = MARGIN + COL_W * 0.67;
     const colTotal = MARGIN + COL_W * 0.84;
 
-    page.drawRectangle({ x: MARGIN, y: y - 18, width: COL_W, height: 20, color: BLUE });
-    for (const [label, x] of [["Description", colDesc + 4], ["Qté", colQty], ["Prix unit.", colUnit], ["Total", colTotal]] as const) {
-      text(label, { x, y: y - 12, size: 9, font: fontBold, color: rgb(1, 1, 1) });
+    for (const [label, x] of [["Description", colDesc], ["Qté", colQty], ["Prix unit.", colUnit], ["Total", colTotal]] as const) {
+      text(label.toUpperCase(), { x, y: y - 12, size: 8, font: fontBold, color: BLUE });
     }
+    page.drawRectangle({ x: MARGIN, y: y - 18, width: COL_W, height: 1, color: BLUE });
     y -= 22;
 
-    let rowIdx = 0;
     for (const order of allOrders) {
       // Order header row if multiple orders
       if (allOrders.length > 1) {
-        page.drawRectangle({ x: MARGIN, y: y - 14, width: COL_W, height: 16, color: rgb(0.94, 0.96, 1) });
-        text(`Commande : ${order.orderNumber}`, { x: colDesc + 4, y: y - 9, size: 8, font: fontBold, color: BLUE });
+        text(`COMMANDE : ${order.orderNumber}`, { x: colDesc, y: y - 9, size: 8, font: fontBold, color: BLUE });
         y -= 17;
       }
 
@@ -222,18 +219,17 @@ export async function GET(
         if (y < 150) break;
         const desc = line.description ?? line.article?.name ?? "—";
         const displayDesc = desc.length > 52 ? desc.substring(0, 52) + "…" : desc;
-        if (rowIdx % 2 === 1) page.drawRectangle({ x: MARGIN, y: y - 16, width: COL_W, height: 18, color: rgb(0.97, 0.97, 0.97) });
-        text(displayDesc, { x: colDesc + 4, y: y - 10, size: 9, font: fontRegular, color: DARK });
+        text(displayDesc, { x: colDesc, y: y - 10, size: 9, font: fontRegular, color: DARK });
         text(String(line.quantity), { x: colQty, y: y - 10, size: 9, font: fontRegular, color: DARK });
         text(formatMoney(Number(line.unitPrice)), { x: colUnit, y: y - 10, size: 9, font: fontRegular, color: DARK });
         text(formatMoney(Number(line.lineTotal)), { x: colTotal, y: y - 10, size: 9, font: fontBold, color: DARK });
-        y -= 19;
-        rowIdx++;
+        y -= 17;
+        page.drawRectangle({ x: MARGIN, y: y + 3, width: COL_W, height: 0.5, color: LIGHT_GRAY });
+        y -= 2;
       }
     }
 
-    page.drawRectangle({ x: MARGIN, y: y - 1, width: COL_W, height: 1, color: BLUE });
-    y -= 16;
+    y -= 14;
 
     // ─── Totals ─────────────────────────────────────────────────────────────────
     const totalsX = MARGIN + COL_W - 220;
@@ -253,15 +249,14 @@ export async function GET(
     if (discount > 0) drawRow("Remise:", `- ${formatMoney(discount, currencySymbol)}`);
     if (bonus > 0) drawRow("Bonus:", `- ${formatMoney(bonus, currencySymbol)}`);
 
-    page.drawRectangle({ x: totalsX, y: y + 11, width: 220, height: 0.75, color: LIGHT_GRAY });
-    y -= 4;
+    page.drawRectangle({ x: totalsX, y: y + 11, width: 220, height: 1, color: DARK });
+    y -= 10;
 
-    page.drawRectangle({ x: totalsX - 4, y: y - 18, width: 228, height: 28, color: BLUE });
-    text("TOTAL:", { x: totalsX, y: y - 10, size: 11, font: fontBold, color: rgb(1, 1, 1) });
+    text("TOTAL", { x: totalsX, y, size: 9, font: fontBold, color: GRAY });
     text(formatMoney(Number(invoice.totalAmount), currencySymbol), {
-      x: valX - 80, y: y - 10, size: 11, font: fontBold, color: rgb(1, 1, 1),
+      x: valX - 110, y: y - 2, size: 15, font: fontBold, color: BLUE,
     });
-    y -= 30;
+    y -= 26;
 
     // ─── Payments ───────────────────────────────────────────────────────────────
     const allPayments = allOrders.flatMap((o) => o.payments);
