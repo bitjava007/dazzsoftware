@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PDFDocument, rgb, PageSizes, type Color } from "pdf-lib";
+import { PDFDocument, PageSizes } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import {
@@ -9,29 +9,23 @@ import {
   drawTrackedRightAlignedText,
 } from "@/lib/pdf-text";
 import { loadInvoiceFonts } from "@/lib/invoice-fonts";
+import {
+  INK,
+  SECONDARY,
+  RULE,
+  GOLD,
+  ACCENT_BG,
+  TOTAL_BAND,
+  DUE,
+  RECEIVED,
+  WHITE,
+  CREAM,
+  drawBrandHeader,
+  drawGoldGradientRule,
+} from "@/lib/invoice-pdf-theme";
 
 // Buffer/pdf-lib require the Node.js runtime (not Edge).
 export const runtime = "nodejs";
-
-const hex = (h: string): Color => {
-  const n = h.replace("#", "");
-  return rgb(
-    parseInt(n.slice(0, 2), 16) / 255,
-    parseInt(n.slice(2, 4), 16) / 255,
-    parseInt(n.slice(4, 6), 16) / 255,
-  );
-};
-
-const INK = hex("#1c1b22");
-const SECONDARY = hex("#8a8794");
-const RULE = hex("#e9e6e0");
-const GOLD = hex("#b08d57");
-const ACCENT_BG = hex("#f6efe4");
-const TOTAL_BAND = hex("#2a2530");
-const DUE = hex("#b0512f");
-const RECEIVED = hex("#3f7d5c");
-const WHITE = rgb(1, 1, 1);
-const CREAM = hex("#f1ece2");
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
   acompte_initial: "Acompte initial",
@@ -160,66 +154,10 @@ export async function GET(
     let y = height - MARGIN;
 
     // ─── Header: logo + brand left, contact right ──────────────────────────────
-    const LOGO_BOX = 46;
-    let brandX = MARGIN;
-    const logoUrl = settings?.logo;
-    if (logoUrl) {
-      try {
-        const resp = await fetch(logoUrl.split("?")[0]);
-        if (resp.ok) {
-          const logoBytes = await resp.arrayBuffer();
-          const ct = resp.headers.get("content-type") ?? "";
-          let img;
-          if (ct.includes("png")) img = await pdfDoc.embedPng(logoBytes);
-          else if (ct.includes("jpeg") || ct.includes("jpg")) img = await pdfDoc.embedJpg(logoBytes);
-          if (img) {
-            const { width: iW, height: iH } = img.scale(1);
-            const scale = Math.min(LOGO_BOX / iW, LOGO_BOX / iH);
-            const dW = iW * scale, dH = iH * scale;
-            page.drawImage(img, {
-              x: MARGIN + (LOGO_BOX - dW) / 2,
-              y: y - LOGO_BOX + (LOGO_BOX - dH) / 2,
-              width: dW,
-              height: dH,
-            });
-            brandX = MARGIN + LOGO_BOX + 14;
-          }
-        }
-      } catch (logoErr) {
-        console.error("[invoice/pdf] logo fetch/embed failed (non-fatal):", logoErr);
-      }
-    }
-
-    const companyName = settings?.companyName ?? "DazzUrembo App";
-    const slogan = settings?.slogan || "Where African heritage meets modern elegance";
-    drawTrackedText(page, companyName.toUpperCase(), brandX, y - 16, { font: serifBold, size: 18, color: INK, tracking: 1.2 });
-    text(slogan, { x: brandX, y: y - 33, size: 9.5, font: serifItalic, color: GOLD });
-
-    const contactLines = [
-      settings?.address,
-      settings?.phone,
-      settings?.email,
-      settings?.website,
-      settings?.taxNumber ? `N° Fiscal: ${settings.taxNumber}` : null,
-    ].filter(Boolean) as string[];
-    let cy = y - 6;
-    for (const line of contactLines) {
-      drawRightAlignedText(page, line, RIGHT_EDGE, cy, { font: sansRegular, size: 9, color: SECONDARY });
-      cy -= 12.5;
-    }
-    y -= 56;
+    y = await drawBrandHeader(pdfDoc, page, settings, { serifBold, serifItalic, sansRegular }, MARGIN, RIGHT_EDGE, y);
 
     // ─── Gold gradient rule ─────────────────────────────────────────────────────
-    const steps = 80;
-    for (let i = 0; i < steps; i++) {
-      const t = i / (steps - 1);
-      const edge = Math.min(t, 1 - t) * 2.4;
-      const a = Math.min(1, edge);
-      const r = 1 - a * (1 - 0.69);
-      const g = 1 - a * (1 - 0.55);
-      const b = 1 - a * (1 - 0.34);
-      page.drawRectangle({ x: MARGIN + (COL_W / steps) * i, y: y - 1, width: COL_W / steps + 0.5, height: 1.6, color: rgb(r, g, b) });
-    }
+    drawGoldGradientRule(page, MARGIN, COL_W, y);
     y -= 34;
 
     // ─── "Facture" title + metadata ─────────────────────────────────────────────
