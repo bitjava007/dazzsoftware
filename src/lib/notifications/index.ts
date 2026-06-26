@@ -21,10 +21,10 @@ function formatMessage(template: string, vars: Record<string, string>): string {
 }
 
 const TEMPLATES: Record<string, string> = {
-  order_created: `Bonjour {{client_name}},\nVotre commande {{order_number}} a bien été enregistrée chez {{company_name}}.\nDate prévue de livraison : {{delivery_date}}\nMontant total : {{total}}\nMerci pour votre confiance.`,
-  order_ready: `Bonjour {{client_name}},\nVotre commande {{order_number}} est maintenant prête pour livraison chez {{company_name}}.\nMerci de nous contacter pour convenir du retrait.\nMerci pour votre confiance.`,
-  order_delivered: `Bonjour {{client_name}},\nVotre commande {{order_number}} a été livrée avec succès.\nMerci de votre confiance en {{company_name}} !\nNous espérons vous revoir bientôt.`,
-  manual_send: `Bonjour {{client_name}},\nVotre commande {{order_number}} est actuellement en cours de traitement chez {{company_name}}.\nMerci pour votre confiance.`,
+  order_created: `Bonjour {{client_name}},\nVotre commande {{order_number}} a bien été enregistrée chez {{company_name}}.\nDate prévue de livraison : {{delivery_date}}\nMontant total : {{total}}\nMerci pour votre confiance.\n— {{company_name}}`,
+  order_ready: `Bonjour {{client_name}},\nVotre commande {{order_number}} est maintenant prête pour livraison chez {{company_name}}.\nMerci de nous contacter pour convenir du retrait.\nMerci pour votre confiance.\n— {{company_name}}`,
+  order_delivered: `Bonjour {{client_name}},\nVotre commande {{order_number}} a été livrée avec succès.\nMerci de votre confiance en {{company_name}} !\nNous espérons vous revoir bientôt.\n— {{company_name}}`,
+  manual_send: `Bonjour {{client_name}},\nVotre commande {{order_number}} est actuellement en cours de traitement chez {{company_name}}.\nMerci pour votre confiance.\n— {{company_name}}`,
 };
 
 async function sendWhatsApp(
@@ -114,7 +114,7 @@ export async function sendOrderNotification(
       emailEnabled: settings?.emailEnabled ?? false,
     };
 
-    const companyName = settings?.companySenderName || settings?.companyName || "Dazzling Tailor";
+    const companyName = settings?.companySenderName || settings?.companyName || settings?.appName || "DazzUrembo App";
     const deliveryDate = order.expectedDeliveryDate
       ? new Date(order.expectedDeliveryDate).toLocaleDateString("fr-FR")
       : "à définir";

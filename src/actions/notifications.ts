@@ -112,7 +112,9 @@ export async function sendTestNotificationAction(formData: FormData) {
   const recipient = String(formData.get("recipient") || "").trim();
   if (!recipient) return { error: "Numéro de test requis" };
 
-  const message = "🧵 Test Dazzling Tailor ERP — Les notifications fonctionnent correctement !";
+  const settings = await prisma.settings.findFirst();
+  const appName = settings?.appName || "DazzUrembo App";
+  const message = `🧵 Test ${appName} — Les notifications fonctionnent correctement !`;
 
   const { sendManualNotification: send } = await import("@/lib/notifications");
 

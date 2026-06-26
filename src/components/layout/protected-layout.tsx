@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/layout/app-shell";
+import { getBranding } from "@/lib/branding";
 
 export async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -10,5 +11,7 @@ export async function ProtectedLayout({ children }: { children: React.ReactNode 
     redirect("/connexion");
   }
 
-  return <AppShell>{children}</AppShell>;
+  const branding = await getBranding();
+
+  return <AppShell branding={branding}>{children}</AppShell>;
 }

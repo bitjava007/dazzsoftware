@@ -11,6 +11,7 @@ import {
   UserCheck, ArrowLeftRight, X, Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { Branding } from "@/lib/branding";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, key: "dashboard" },
@@ -28,7 +29,7 @@ const navItems = [
   { href: "/parametres", icon: Settings, key: "parametres" },
 ];
 
-function SidebarContent({ onClose }: { onClose?: () => void }) {
+function SidebarContent({ onClose, branding }: { onClose?: () => void; branding: Branding }) {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslations("nav");
@@ -45,12 +46,20 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       {/* Brand */}
       <div className="flex items-center justify-between px-4 sm:px-6 py-5 border-b border-slate-700 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-9 h-9 bg-blue-600 rounded-lg shrink-0">
-            <Scissors className="w-5 h-5 text-white" />
+          <div
+            className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 overflow-hidden"
+            style={{ backgroundColor: branding.logo ? "transparent" : branding.buttonColor }}
+          >
+            {branding.logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={branding.logo} alt={branding.appName} className="w-full h-full object-contain" />
+            ) : (
+              <Scissors className="w-5 h-5 text-white" />
+            )}
           </div>
           <div>
-            <p className="font-bold text-white text-sm leading-tight">Dazzling Tailor</p>
-            <p className="text-slate-400 text-xs">ERP Couture</p>
+            <p className="font-bold text-white text-sm leading-tight">{branding.appName}</p>
+            <p className="text-slate-400 text-xs">{branding.slogan || "ERP Couture"}</p>
           </div>
         </div>
         {onClose && (
@@ -78,9 +87,10 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
                 isActive
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                  ? "text-white shadow-lg"
                   : "text-slate-400 hover:bg-slate-800 hover:text-white"
               )}
+              style={isActive ? { backgroundColor: branding.buttonColor } : undefined}
             >
               <Icon className="w-4 h-4 shrink-0" />
               <span>{t(item.key)}</span>
@@ -107,25 +117,26 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 interface SidebarProps {
   mobileOpen?: boolean;
   onMobileClose?: () => void;
+  branding: Branding;
 }
 
-export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
+export function Sidebar({ mobileOpen, onMobileClose, branding }: SidebarProps) {
   return (
     <>
       {/* Desktop sidebar — always visible on lg+ */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-700 flex-col">
-        <SidebarContent />
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-slate-700 flex-col">
+        <SidebarContent branding={branding} />
       </aside>
 
       {/* Mobile sidebar — slide in from left */}
       <aside
         className={cn(
-          "lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-700 flex flex-col",
+          "lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-slate-700 flex flex-col",
           "transition-transform duration-300 ease-in-out",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <SidebarContent onClose={onMobileClose} />
+        <SidebarContent onClose={onMobileClose} branding={branding} />
       </aside>
     </>
   );

@@ -153,11 +153,11 @@ export async function GET(
   }
 
   // ─── Company info ──────────────────────────────────────────────────────────
-  const companyName = settings?.companyName ?? "Dazzling Tailor";
+  const companyName = settings?.companyName ?? "DazzUrembo App";
   const infoX = M + (logoHeight > 0 ? 155 : 0);
   text(companyName, { x: infoX, y: y - 14, size: 13, font: fontB, color: DARK });
   let cy = y - 28;
-  for (const line of [settings?.address, settings?.phone, settings?.email].filter(Boolean) as string[]) {
+  for (const line of [settings?.address, settings?.phone, settings?.email, settings?.website].filter(Boolean) as string[]) {
     text(line, { x: infoX, y: cy, size: 9, font: fontR, color: GRAY });
     cy -= 13;
   }
@@ -265,7 +265,7 @@ export async function GET(
 
   // ─── Footer ────────────────────────────────────────────────────────────────
   page.drawRectangle({ x: M, y: 38, width: CW, height: 0.75, color: LGRAY });
-  text(`${companyName} · Merci pour votre confiance`, {
+  text(`${settings?.appName ?? "DazzUrembo App"} · Merci pour votre confiance`, {
     x: M, y: 24, size: 8, font: fontR, color: GRAY,
   });
   text(`Reçu généré le ${fmtDate(new Date())} à ${fmtTime(new Date())}`, {
