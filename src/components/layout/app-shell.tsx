@@ -4,8 +4,15 @@ import { useState } from "react";
 import { Sidebar } from "./sidebar";
 import { Menu, Scissors } from "lucide-react";
 import type { Branding } from "@/lib/branding";
+import type { AppModule } from "@/lib/permissions-shared";
 
-export function AppShell({ children, branding }: { children: React.ReactNode; branding: Branding }) {
+interface AppShellProps {
+  children: React.ReactNode;
+  branding: Branding;
+  visibleModules: AppModule[];
+}
+
+export function AppShell({ children, branding, visibleModules }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -19,7 +26,12 @@ export function AppShell({ children, branding }: { children: React.ReactNode; br
         />
       )}
 
-      <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} branding={branding} />
+      <Sidebar
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+        branding={branding}
+        visibleModules={visibleModules}
+      />
 
       <div className="flex flex-col flex-1 lg:ml-64 min-h-screen overflow-hidden">
         {/* Mobile top bar */}

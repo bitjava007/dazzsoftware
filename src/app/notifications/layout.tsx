@@ -1,5 +1,5 @@
 import { ProtectedLayout } from "@/components/layout/protected-layout";
-
-export default function NotificationsLayout({ children }: { children: React.ReactNode }) {
-  return <ProtectedLayout>{children}</ProtectedLayout>;
+import { ModuleGuard } from "@/components/layout/module-guard";
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return <ProtectedLayout><ModuleGuard module="notifications">{children}</ModuleGuard></ProtectedLayout>;
 }

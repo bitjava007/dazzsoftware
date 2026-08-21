@@ -12,27 +12,42 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Branding } from "@/lib/branding";
+import type { AppModule } from "@/lib/permissions-shared";
 
-const navItems = [
-  { href: "/dashboard", icon: LayoutDashboard, key: "dashboard" },
-  { href: "/clients", icon: Users, key: "clients" },
-  { href: "/mesures", icon: Ruler, key: "mesures" },
-  { href: "/articles", icon: ShoppingBag, key: "articles" },
-  { href: "/commandes", icon: ClipboardList, key: "commandes" },
-  { href: "/depenses", icon: Receipt, key: "depenses" },
-  { href: "/paiements", icon: CreditCard, key: "paiements" },
-  { href: "/factures", icon: FileText, key: "factures" },
-  { href: "/rapports", icon: BarChart3, key: "rapports" },
-  { href: "/taux-de-change", icon: ArrowLeftRight, key: "taux_de_change" },
-  { href: "/utilisateurs", icon: UserCheck, key: "utilisateurs" },
-  { href: "/notifications", icon: Bell, key: "notifications" },
-  { href: "/parametres", icon: Settings, key: "parametres" },
-];
+// dashboard always visible — requires no module permission
+const ALL_NAV_ITEMS = [
+  { href: "/dashboard",      icon: LayoutDashboard, key: "dashboard",      module: null            },
+  { href: "/clients",        icon: Users,           key: "clients",        module: "clients"        },
+  { href: "/mesures",        icon: Ruler,           key: "mesures",        module: "mesures"        },
+  { href: "/articles",       icon: ShoppingBag,     key: "articles",       module: "articles"       },
+  { href: "/commandes",      icon: ClipboardList,   key: "commandes",      module: "commandes"      },
+  { href: "/depenses",       icon: Receipt,         key: "depenses",       module: "depenses"       },
+  { href: "/paiements",      icon: CreditCard,      key: "paiements",      module: "paiements"      },
+  { href: "/factures",       icon: FileText,        key: "factures",       module: "factures"       },
+  { href: "/rapports",       icon: BarChart3,       key: "rapports",       module: "rapports"       },
+  { href: "/taux-de-change", icon: ArrowLeftRight,  key: "taux_de_change", module: "taux_de_change" },
+  { href: "/utilisateurs",   icon: UserCheck,       key: "utilisateurs",   module: "utilisateurs"   },
+  { href: "/notifications",  icon: Bell,            key: "notifications",  module: "notifications"  },
+  { href: "/parametres",     icon: Settings,        key: "parametres",     module: "parametres"     },
+] as const;
 
-function SidebarContent({ onClose, branding }: { onClose?: () => void; branding: Branding }) {
+function SidebarContent({
+  onClose,
+  branding,
+  visibleModules,
+}: {
+  onClose?: () => void;
+  branding: Branding;
+  visibleModules: AppModule[];
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslations("nav");
+
+  const visibleSet = new Set<string>(visibleModules);
+  const navItems = ALL_NAV_ITEMS.filter(
+    (item) => item.module === null || visibleSet.has(item.module),
+  );
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -118,14 +133,15 @@ interface SidebarProps {
   mobileOpen?: boolean;
   onMobileClose?: () => void;
   branding: Branding;
+  visibleModules: AppModule[];
 }
 
-export function Sidebar({ mobileOpen, onMobileClose, branding }: SidebarProps) {
+export function Sidebar({ mobileOpen, onMobileClose, branding, visibleModules }: SidebarProps) {
   return (
     <>
       {/* Desktop sidebar — always visible on lg+ */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-slate-700 flex-col">
-        <SidebarContent branding={branding} />
+        <SidebarContent branding={branding} visibleModules={visibleModules} />
       </aside>
 
       {/* Mobile sidebar — slide in from left */}
@@ -136,7 +152,7 @@ export function Sidebar({ mobileOpen, onMobileClose, branding }: SidebarProps) {
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <SidebarContent onClose={onMobileClose} branding={branding} />
+        <SidebarContent onClose={onMobileClose} branding={branding} visibleModules={visibleModules} />
       </aside>
     </>
   );

@@ -18,7 +18,8 @@ model Profile {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  loginHistory  UserLoginHistory[]
+  loginHistory      UserLoginHistory[]
+  modulePermissions UserModulePermission[]
   clientsCreated Client[] @relation("ClientCreatedBy")
   clientsUpdated Client[] @relation("ClientUpdatedBy")
   clientsDeleted Client[] @relation("ClientDeletedBy")
@@ -69,6 +70,42 @@ enum Role {
   user_basic
 
   @@map("role")
+}
+
+// ─── Module Permissions ───────────────────────────────────────────────────────
+// Fine-grained per-user access control for roles accountant/tailor/user_basic.
+// admin and manager always have full access and are never stored here.
+model UserModulePermission {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  module    AppModule
+  canView   Boolean   @default(false) @map("can_view")
+  canCreate Boolean   @default(false) @map("can_create")
+  canEdit   Boolean   @default(false) @map("can_edit")
+  canDelete Boolean   @default(false) @map("can_delete")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, module])
+  @@map("user_module_permissions")
+}
+
+enum AppModule {
+  clients
+  mesures
+  articles
+  commandes
+  depenses
+  paiements
+  factures
+  rapports
+  taux_de_change
+  notifications
+  utilisateurs
+  parametres
+
+  @@map("app_module")
 }
 
 // ─── Login History ────────────────────────────────────────────────────────────
