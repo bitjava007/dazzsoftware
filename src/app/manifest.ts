@@ -1,21 +1,29 @@
 import type { MetadataRoute } from "next";
-import { getBranding } from "@/lib/branding";
 
-export const dynamic = "force-dynamic";
-
-export default async function manifest(): Promise<MetadataRoute.Manifest> {
-  const branding = await getBranding();
-
+export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: branding.appName,
-    short_name: branding.appName,
-    description: branding.slogan || "Système de gestion pour atelier de couture",
+    name: "Dazzsoftware ERP",
+    short_name: "Dazzsoftware",
+    description: "Système de gestion pour atelier de couture",
     start_url: "/dashboard",
     display: "standalone",
+    orientation: "portrait",
     background_color: "#ffffff",
-    theme_color: branding.primaryColor,
-    icons: branding.favicon
-      ? [{ src: branding.favicon, sizes: "192x192", type: "image/png" }]
-      : [],
+    theme_color: "#18181b",
+    categories: ["business", "productivity"],
+    icons: [
+      {
+        src: "/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable",
+      },
+      {
+        src: "/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
+    ],
   };
 }

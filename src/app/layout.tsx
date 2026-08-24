@@ -40,6 +40,11 @@ export default async function RootLayout({
     <html lang="fr" suppressHydrationWarning>
       <head>
         <style id="branding-theme" dangerouslySetInnerHTML={{ __html: themeVars }} />
+        <meta name="theme-color" content="#18181b" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Dazzsoftware" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body>
         <NextIntlClientProvider messages={messages}>
