@@ -14,7 +14,8 @@
     "utilisateurs": "Utilisateurs",
     "deconnexion": "Déconnexion",
     "profil": "Mon profil",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "fournitures": "Fournitures"
   },
   "auth": {
     "connexion": "Connexion",

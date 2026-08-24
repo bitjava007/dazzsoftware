@@ -59,6 +59,17 @@ model Profile {
 
   auditLogs AuditLog[]
 
+  stockMovements           StockMovement[]
+  stockEntriesCreated      StockEntry[]    @relation("EntryCreatedBy")
+  stockEntriesValidated    StockEntry[]    @relation("EntryValidatedBy")
+  stockExitsCreated        StockExit[]     @relation("ExitCreatedBy")
+  stockExitsValidated      StockExit[]     @relation("ExitValidatedBy")
+  stockTransfersCreated    StockTransfer[] @relation("TransferCreatedBy")
+  stockTransfersValidated  StockTransfer[] @relation("TransferValidatedBy")
+  stockAdjustments         StockAdjustment[]
+  inventorySessionsCreated   InventorySession[] @relation("InventoryCreatedBy")
+  inventorySessionsValidated InventorySession[] @relation("InventoryValidatedBy")
+
   @@map("profiles")
 }
 
@@ -104,6 +115,7 @@ enum AppModule {
   notifications
   utilisateurs
   parametres
+  fournitures
 
   @@map("app_module")
 }
@@ -685,3 +697,407 @@ enum AuditAction {
 
   @@map("audit_action")
 }
+
+// ─── Fournitures & Gestion de Stock ──────────────────────────────────────────
+
+model SupplyCategory {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  supplies Supply[]
+
+  @@map("supply_categories")
+}
+
+model Supplier {
+  id             String   @id @default(uuid())
+  name           String
+  phone          String?
+  whatsappNumber String?  @map("whatsapp_number")
+  email          String?
+  address        String?
+  city           String?
+  country        String?
+  contactName    String?  @map("contact_name")
+  notes          String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  supplies     Supply[]
+  stockEntries StockEntry[]
+
+  @@map("suppliers")
+}
+
+enum SupplyUnit {
+  piece
+  metre
+  centimetre
+  bobine
+  rouleau
+  kilogramme
+  gramme
+  litre
+  paquet
+  boite
+  autre
+
+  @@map("supply_unit")
+}
+
+model StockLocation {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  stockBalances    StockBalance[]
+  movementsFrom    StockMovement[]   @relation("MovementFromLocation")
+  movementsTo      StockMovement[]   @relation("MovementToLocation")
+  entryLines       StockEntryLine[]
+  exitLines        StockExitLine[]
+  transfersFrom    StockTransfer[]   @relation("TransferFrom")
+  transfersTo      StockTransfer[]   @relation("TransferTo")
+  adjustmentLines  StockAdjustmentLine[]
+  inventorySessions InventorySession[]
+  inventoryLines   InventoryLine[]
+  defaultSupplies  Supply[]
+
+  @@map("stock_locations")
+}
+
+model Supply {
+  id                String         @id @default(uuid())
+  code              String         @unique
+  name              String
+  categoryId        String?        @map("category_id")
+  unit              SupplyUnit
+  minimumStock      Decimal        @default(0) @map("minimum_stock") @db.Decimal(12, 3)
+  description       String?
+  defaultSupplierId String?        @map("default_supplier_id")
+  referencePrice    Decimal?       @map("reference_price") @db.Decimal(12, 2)
+  defaultLocationId String?        @map("default_location_id")
+  isActive          Boolean        @default(true) @map("is_active")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  category        SupplyCategory? @relation(fields: [categoryId], references: [id])
+  defaultSupplier Supplier?       @relation(fields: [defaultSupplierId], references: [id])
+  defaultLocation StockLocation?  @relation(fields: [defaultLocationId], references: [id])
+
+  stockBalances   StockBalance[]
+  movements       StockMovement[]
+  entryLines      StockEntryLine[]
+  exitLines       StockExitLine[]
+  transferLines   StockTransferLine[]
+  adjustmentLines StockAdjustmentLine[]
+  inventoryLines  InventoryLine[]
+
+  @@map("supplies")
+}
+
+model StockBalance {
+  id         String   @id @default(uuid())
+  supplyId   String   @map("supply_id")
+  locationId String   @map("location_id")
+  quantity   Decimal  @default(0) @db.Decimal(12, 3)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  supply   Supply        @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+  location StockLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([supplyId, locationId])
+  @@map("stock_balances")
+}
+
+enum StockMovementType {
+  entry
+  exit
+  transfer_out
+  transfer_in
+  adjustment
+  inventory_adjustment
+
+  @@map("stock_movement_type")
+}
+
+model StockMovement {
+  id             String            @id @default(uuid())
+  reference      String
+  type           StockMovementType
+  supplyId       String            @map("supply_id")
+  quantity       Decimal           @db.Decimal(12, 3)
+  unit           SupplyUnit
+  fromLocationId String?           @map("from_location_id")
+  toLocationId   String?           @map("to_location_id")
+  unitCost       Decimal?          @map("unit_cost") @db.Decimal(12, 2)
+  totalCost      Decimal?          @map("total_cost") @db.Decimal(12, 2)
+  reason         String?
+  comment        String?
+  createdById    String?           @map("created_by")
+  createdAt      DateTime          @default(now()) @map("created_at")
+
+  supply       Supply         @relation(fields: [supplyId], references: [id])
+  fromLocation StockLocation? @relation("MovementFromLocation", fields: [fromLocationId], references: [id])
+  toLocation   StockLocation? @relation("MovementToLocation", fields: [toLocationId], references: [id])
+  createdBy    Profile?       @relation(fields: [createdById], references: [id])
+
+  @@map("stock_movements")
+}
+
+enum EntryStatus {
+  draft
+  validated
+  cancelled
+
+  @@map("entry_status")
+}
+
+model StockEntry {
+  id              String      @id @default(uuid())
+  reference       String      @unique
+  date            DateTime
+  supplierId      String?     @map("supplier_id")
+  supplierInvoice String?     @map("supplier_invoice")
+  locationId      String?     @map("location_id")
+  comment         String?
+  status          EntryStatus @default(draft)
+  totalAmount     Decimal     @default(0) @map("total_amount") @db.Decimal(12, 2)
+  createdById     String?     @map("created_by")
+  validatedById   String?     @map("validated_by")
+  validatedAt     DateTime?   @map("validated_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  supplier    Supplier?       @relation(fields: [supplierId], references: [id])
+  createdBy   Profile?        @relation("EntryCreatedBy", fields: [createdById], references: [id])
+  validatedBy Profile?        @relation("EntryValidatedBy", fields: [validatedById], references: [id])
+  lines       StockEntryLine[]
+
+  @@map("stock_entries")
+}
+
+model StockEntryLine {
+  id        String  @id @default(uuid())
+  entryId   String  @map("entry_id")
+  supplyId  String  @map("supply_id")
+  locationId String @map("location_id")
+  quantity  Decimal @db.Decimal(12, 3)
+  unitCost  Decimal @map("unit_cost") @db.Decimal(12, 2)
+  totalCost Decimal @map("total_cost") @db.Decimal(12, 2)
+
+  entry    StockEntry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  supply   Supply        @relation(fields: [supplyId], references: [id])
+  location StockLocation @relation(fields: [locationId], references: [id])
+
+  @@map("stock_entry_lines")
+}
+
+enum ExitDestination {
+  atelier_couture
+  boutique
+  depot
+  autre
+  perte_dommage
+
+  @@map("exit_destination")
+}
+
+enum ExitReason {
+  consommation_production
+  reparation
+  echantillon
+  perte
+  dommage
+  don
+  ajustement
+  autre
+
+  @@map("exit_reason")
+}
+
+enum ExitStatus {
+  draft
+  validated
+  cancelled
+
+  @@map("exit_status")
+}
+
+model StockExit {
+  id            String          @id @default(uuid())
+  reference     String          @unique
+  date          DateTime
+  destination   ExitDestination
+  reason        ExitReason
+  externalRef   String?         @map("external_ref")
+  comment       String?
+  status        ExitStatus      @default(draft)
+  createdById   String?         @map("created_by")
+  validatedById String?         @map("validated_by")
+  validatedAt   DateTime?       @map("validated_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  createdBy   Profile?       @relation("ExitCreatedBy", fields: [createdById], references: [id])
+  validatedBy Profile?       @relation("ExitValidatedBy", fields: [validatedById], references: [id])
+  lines       StockExitLine[]
+
+  @@map("stock_exits")
+}
+
+model StockExitLine {
+  id         String  @id @default(uuid())
+  exitId     String  @map("exit_id")
+  supplyId   String  @map("supply_id")
+  locationId String  @map("location_id")
+  quantity   Decimal @db.Decimal(12, 3)
+
+  exit     StockExit     @relation(fields: [exitId], references: [id], onDelete: Cascade)
+  supply   Supply        @relation(fields: [supplyId], references: [id])
+  location StockLocation @relation(fields: [locationId], references: [id])
+
+  @@map("stock_exit_lines")
+}
+
+enum TransferStatus {
+  draft
+  shipped
+  received
+  cancelled
+
+  @@map("transfer_status")
+}
+
+model StockTransfer {
+  id             String         @id @default(uuid())
+  reference      String         @unique
+  date           DateTime
+  fromLocationId String         @map("from_location_id")
+  toLocationId   String         @map("to_location_id")
+  comment        String?
+  status         TransferStatus @default(draft)
+  createdById    String?        @map("created_by")
+  validatedById  String?        @map("validated_by")
+  validatedAt    DateTime?      @map("validated_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  fromLocation StockLocation       @relation("TransferFrom", fields: [fromLocationId], references: [id])
+  toLocation   StockLocation       @relation("TransferTo", fields: [toLocationId], references: [id])
+  createdBy    Profile?            @relation("TransferCreatedBy", fields: [createdById], references: [id])
+  validatedBy  Profile?            @relation("TransferValidatedBy", fields: [validatedById], references: [id])
+  lines        StockTransferLine[]
+
+  @@map("stock_transfers")
+}
+
+model StockTransferLine {
+  id         String  @id @default(uuid())
+  transferId String  @map("transfer_id")
+  supplyId   String  @map("supply_id")
+  quantity   Decimal @db.Decimal(12, 3)
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  supply   Supply        @relation(fields: [supplyId], references: [id])
+
+  @@map("stock_transfer_lines")
+}
+
+enum AdjustmentReason {
+  erreur_saisie
+  perte
+  casse
+  vol
+  inventaire
+  correction_administrative
+  autre
+
+  @@map("adjustment_reason")
+}
+
+model StockAdjustment {
+  id          String           @id @default(uuid())
+  reference   String           @unique
+  date        DateTime
+  reason      AdjustmentReason
+  comment     String?
+  createdById String?          @map("created_by")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  createdBy Profile?              @relation(fields: [createdById], references: [id])
+  lines     StockAdjustmentLine[]
+
+  @@map("stock_adjustments")
+}
+
+model StockAdjustmentLine {
+  id             String  @id @default(uuid())
+  adjustmentId   String  @map("adjustment_id")
+  supplyId       String  @map("supply_id")
+  locationId     String  @map("location_id")
+  quantityBefore Decimal @map("quantity_before") @db.Decimal(12, 3)
+  quantityAfter  Decimal @map("quantity_after") @db.Decimal(12, 3)
+  quantityDelta  Decimal @map("quantity_delta") @db.Decimal(12, 3)
+
+  adjustment StockAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  supply     Supply          @relation(fields: [supplyId], references: [id])
+  location   StockLocation   @relation(fields: [locationId], references: [id])
+
+  @@map("stock_adjustment_lines")
+}
+
+enum InventoryStatus {
+  draft
+  in_progress
+  validated
+  cancelled
+
+  @@map("inventory_status")
+}
+
+model InventorySession {
+  id            String          @id @default(uuid())
+  reference     String          @unique
+  date          DateTime
+  locationId    String?         @map("location_id")
+  comment       String?
+  status        InventoryStatus @default(draft)
+  createdById   String?         @map("created_by")
+  validatedById String?         @map("validated_by")
+  validatedAt   DateTime?       @map("validated_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  location    StockLocation? @relation(fields: [locationId], references: [id])
+  createdBy   Profile?       @relation("InventoryCreatedBy", fields: [createdById], references: [id])
+  validatedBy Profile?       @relation("InventoryValidatedBy", fields: [validatedById], references: [id])
+  lines       InventoryLine[]
+
+  @@map("inventory_sessions")
+}
+
+model InventoryLine {
+  id            String   @id @default(uuid())
+  sessionId     String   @map("session_id")
+  supplyId      String   @map("supply_id")
+  locationId    String   @map("location_id")
+  theoreticalQty Decimal @map("theoretical_qty") @db.Decimal(12, 3)
+  physicalQty   Decimal? @map("physical_qty") @db.Decimal(12, 3)
+  variance      Decimal? @db.Decimal(12, 3)
+
+  session  InventorySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  supply   Supply           @relation(fields: [supplyId], references: [id])
+  location StockLocation    @relation(fields: [locationId], references: [id])
+
+  @@map("inventory_lines")
+}
+

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Ruler, ShoppingBag, ClipboardList,
   Receipt, CreditCard, FileText, BarChart3, Settings, LogOut, Scissors,
-  UserCheck, ArrowLeftRight, X, Bell,
+  UserCheck, ArrowLeftRight, X, Bell, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Branding } from "@/lib/branding";
@@ -29,6 +29,7 @@ const ALL_NAV_ITEMS = [
   { href: "/utilisateurs",   icon: UserCheck,       key: "utilisateurs",   module: "utilisateurs"   },
   { href: "/notifications",  icon: Bell,            key: "notifications",  module: "notifications"  },
   { href: "/parametres",     icon: Settings,        key: "parametres",     module: "parametres"     },
+  { href: "/fournitures",    icon: Package,         key: "fournitures",    module: "fournitures"    },
 ] as const;
 
 function SidebarContent({

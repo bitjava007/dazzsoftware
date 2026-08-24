@@ -13,6 +13,7 @@ export const ALL_MODULES = [
   "notifications",
   "utilisateurs",
   "parametres",
+  "fournitures",
 ] as const;
 
 export type AppModule = (typeof ALL_MODULES)[number];

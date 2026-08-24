@@ -20,6 +20,7 @@ const MODULE_LABELS: Record<AppModule, string> = {
   notifications:  "Notifications",
   utilisateurs:   "Utilisateurs",
   parametres:     "Paramètres",
+  fournitures:    "Fournitures",
 };
 
 const ACTION_LABELS = [

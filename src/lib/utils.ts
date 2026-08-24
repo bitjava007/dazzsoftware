@@ -64,6 +64,47 @@ export function generateInvoiceNumber(prefix = "FACT"): string {
   return `${prefix}-${date}-${random}`;
 }
 
+export function generateSupplyCode(prefix = "FOU"): string {
+  const date = format(new Date(), "yyyyMM");
+  const random = Math.floor(Math.random() * 9000) + 1000;
+  return `${prefix}-${date}-${random}`;
+}
+
+export function generateEntryRef(): string {
+  const date = format(new Date(), "yyyyMM");
+  const random = Math.floor(Math.random() * 9000) + 1000;
+  return `ENT-${date}-${random}`;
+}
+
+export function generateExitRef(): string {
+  const date = format(new Date(), "yyyyMM");
+  const random = Math.floor(Math.random() * 9000) + 1000;
+  return `SOR-${date}-${random}`;
+}
+
+export function generateTransferRef(): string {
+  const date = format(new Date(), "yyyyMM");
+  const random = Math.floor(Math.random() * 9000) + 1000;
+  return `TRF-${date}-${random}`;
+}
+
+export function generateAdjustmentRef(): string {
+  const date = format(new Date(), "yyyyMM");
+  const random = Math.floor(Math.random() * 9000) + 1000;
+  return `AJU-${date}-${random}`;
+}
+
+export function generateInventoryRef(): string {
+  const date = format(new Date(), "yyyyMM");
+  const random = Math.floor(Math.random() * 9000) + 1000;
+  return `INV-${date}-${random}`;
+}
+
+export function formatQuantity(qty: number | string | null | undefined, unit: string): string {
+  if (qty === null || qty === undefined) return "—";
+  return `${Number(qty).toLocaleString("fr-FR")} ${unit}`;
+}
+
 export function truncate(str: string, length: number): string {
   if (str.length <= length) return str;
   return str.slice(0, length) + "...";
