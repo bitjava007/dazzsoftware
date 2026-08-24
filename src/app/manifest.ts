@@ -1,15 +1,21 @@
 import type { MetadataRoute } from "next";
+import { getBranding } from "@/lib/branding";
 
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const branding = await getBranding();
+
+  // Derive a short name: first word of appName, capped at 12 chars
+  const shortName = branding.appName.split(" ")[0].slice(0, 12);
+
   return {
-    name: "Dazzsoftware ERP",
-    short_name: "Dazzsoftware",
-    description: "Système de gestion pour atelier de couture",
+    name: branding.appName,
+    short_name: shortName,
+    description: branding.slogan ?? branding.companyName,
     start_url: "/dashboard",
     display: "standalone",
     orientation: "portrait",
     background_color: "#ffffff",
-    theme_color: "#18181b",
+    theme_color: branding.sidebarColor,
     categories: ["business", "productivity"],
     icons: [
       {

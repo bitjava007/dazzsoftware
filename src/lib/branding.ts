@@ -2,7 +2,8 @@ import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 
 export const DEFAULT_APP_NAME = "DazzUrembo App";
-export const DEFAULT_COMPANY_NAME = "DazzUrembo App";
+export const DEFAULT_COMPANY_NAME = "DAZZLING UREMBO";
+export const DEFAULT_SLOGAN = "Where African heritage meets modern elegance";
 export const DEFAULT_PRIMARY_COLOR = "#2563eb";
 export const DEFAULT_SECONDARY_COLOR = "#0f172a";
 export const DEFAULT_BUTTON_COLOR = "#2563eb";
@@ -40,7 +41,7 @@ const DEFAULT_BRANDING: Branding = {
   whatsappNumber: null,
   email: null,
   website: null,
-  slogan: null,
+  slogan: DEFAULT_SLOGAN,
   primaryColor: DEFAULT_PRIMARY_COLOR,
   secondaryColor: DEFAULT_SECONDARY_COLOR,
   buttonColor: DEFAULT_BUTTON_COLOR,
