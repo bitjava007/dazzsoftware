@@ -5,17 +5,22 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 
-async function requireAdmin() {
+async function requirePermission(action: "canCreate" | "canEdit" | "canDelete" | "canView") {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Non authentifié");
-  const profile = await prisma.profile.findUnique({ where: { id: user.id }, select: { role: true } });
-  if (profile?.role !== "admin" && profile?.role !== "manager") throw new Error("Accès refusé");
-  return user;
+  const profile = await prisma.profile.findUnique({ where: { id: user.id }, select: { role: true, id: true } });
+  if (!profile) throw new Error("Profil introuvable");
+  if (profile.role === "admin" || profile.role === "manager") return profile;
+  const perm = await prisma.userModulePermission.findUnique({
+    where: { userId_module: { userId: user.id, module: "fournitures_fournisseurs" } },
+  });
+  if (!perm || !perm[action]) throw new Error("Accès refusé");
+  return profile;
 }
 
 export async function createSupplier(formData: FormData) {
-  await requireAdmin();
+  await requirePermission("canCreate");
 
   const name = (formData.get("name") as string)?.trim();
   if (!name) throw new Error("Nom requis");
@@ -39,7 +44,7 @@ export async function createSupplier(formData: FormData) {
 }
 
 export async function updateSupplier(id: string, formData: FormData) {
-  await requireAdmin();
+  await requirePermission("canEdit");
 
   await prisma.supplier.update({
     where: { id },
@@ -62,7 +67,7 @@ export async function updateSupplier(id: string, formData: FormData) {
 }
 
 export async function toggleSupplierActive(id: string, isActive: boolean) {
-  await requireAdmin();
+  await requirePermission("canEdit");
   await prisma.supplier.update({ where: { id }, data: { isActive } });
   revalidatePath("/fournitures/fournisseurs");
 }

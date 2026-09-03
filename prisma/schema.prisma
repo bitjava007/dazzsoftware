@@ -116,6 +116,15 @@ enum AppModule {
   utilisateurs
   parametres
   fournitures
+  fournitures_entrees
+  fournitures_sorties
+  fournitures_transferts
+  fournitures_inventaire
+  fournitures_ajustements
+  fournitures_etat_stock
+  fournitures_historique
+  fournitures_fournisseurs
+  fournitures_emplacements
 
   @@map("app_module")
 }

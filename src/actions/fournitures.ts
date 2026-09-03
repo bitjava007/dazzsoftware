@@ -21,7 +21,7 @@ async function requirePermission(action: "canCreate" | "canEdit" | "canDelete" |
   if (profile.role === "admin" || profile.role === "manager") return profile;
 
   const perm = await prisma.userModulePermission.findUnique({
-    where: { userId_module: { userId: user.id, module: "fournitures" } },
+    where: { userId_module: { userId: user.id, module: "fournitures" } }, // supplies list
   });
   if (!perm || !perm[action]) throw new Error("Accès refusé");
   return profile;
@@ -114,7 +114,18 @@ export async function createCategory(formData: FormData) {
 // ─── Location CRUD ───────────────────────────────────────────────────────────
 
 export async function createLocation(formData: FormData) {
-  await requirePermission("canCreate");
+  // Locations are managed from the Emplacements sub-module
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Non authentifié");
+  const profile = await prisma.profile.findUnique({ where: { id: user.id }, select: { role: true, id: true } });
+  if (!profile) throw new Error("Profil introuvable");
+  if (profile.role !== "admin" && profile.role !== "manager") {
+    const perm = await prisma.userModulePermission.findUnique({
+      where: { userId_module: { userId: user.id, module: "fournitures_emplacements" } },
+    });
+    if (!perm?.canCreate) throw new Error("Accès refusé");
+  }
   const name = (formData.get("name") as string)?.trim();
   if (!name) throw new Error("Nom requis");
   await prisma.stockLocation.create({ data: { name, description: (formData.get("description") as string) || null } });

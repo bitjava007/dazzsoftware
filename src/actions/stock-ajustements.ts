@@ -15,7 +15,7 @@ async function getUser() {
   if (!profile) throw new Error("Profil introuvable");
   if (profile.role !== "admin" && profile.role !== "manager") {
     const perm = await prisma.userModulePermission.findUnique({
-      where: { userId_module: { userId: user.id, module: "fournitures" } },
+      where: { userId_module: { userId: user.id, module: "fournitures_ajustements" } },
     });
     if (!perm?.canCreate) throw new Error("Accès refusé");
   }

@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+import { getMyPermissions } from "@/lib/permissions";
+import { FOURNITURES_MODULES } from "@/lib/permissions-shared";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Package, AlertTriangle, XCircle, ArrowDownCircle, ArrowUpCircle, TrendingUp } from "lucide-react";
@@ -12,6 +15,9 @@ const UNIT_LABELS: Record<string, string> = {
 };
 
 export default async function FournituresDashboard() {
+  const perms = await getMyPermissions();
+  const hasAnyAccess = FOURNITURES_MODULES.some((m) => perms[m].canView);
+  if (!hasAnyAccess) redirect("/dashboard");
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
