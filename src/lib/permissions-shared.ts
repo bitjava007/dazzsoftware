@@ -37,6 +37,8 @@ export interface ModulePerms {
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  canValidate: boolean;
+  canCancel: boolean;
 }
 
 export type UserPermissions = Record<AppModule, ModulePerms>;

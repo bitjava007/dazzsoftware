@@ -14,6 +14,14 @@ import { Button } from "@/components/ui/button";
 import type { Branding } from "@/lib/branding";
 import type { AppModule } from "@/lib/permissions-shared";
 
+const ROLE_LABELS: Record<string, string> = {
+  admin:      "Super Administrateur",
+  manager:    "Gestionnaire",
+  accountant: "Comptable",
+  tailor:     "Tailleur",
+  user_basic: "Utilisateur",
+};
+
 // dashboard always visible — requires no module permission
 const ALL_NAV_ITEMS = [
   { href: "/dashboard",      icon: LayoutDashboard, key: "dashboard",      module: null            },
@@ -32,21 +40,34 @@ const ALL_NAV_ITEMS = [
   { href: "/fournitures",    icon: Package,         key: "fournitures",    module: "fournitures"    },
 ] as const;
 
+function getInitials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+interface CurrentUser {
+  fullName: string;
+  role: string;
+}
+
 function SidebarContent({
   onClose,
   branding,
   visibleModules,
+  currentUser,
 }: {
   onClose?: () => void;
   branding: Branding;
   visibleModules: AppModule[];
+  currentUser: CurrentUser;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const t = useTranslations("nav");
+  const router   = useRouter();
+  const t        = useTranslations("nav");
 
   const visibleSet = new Set<string>(visibleModules);
-  const navItems = ALL_NAV_ITEMS.filter(
+  const navItems   = ALL_NAV_ITEMS.filter(
     (item) => item.module === null || visibleSet.has(item.module),
   );
 
@@ -56,6 +77,9 @@ function SidebarContent({
     router.push("/connexion");
     router.refresh();
   };
+
+  const initials  = getInitials(currentUser.fullName);
+  const roleLabel = ROLE_LABELS[currentUser.role] ?? currentUser.role;
 
   return (
     <>
@@ -92,7 +116,7 @@ function SidebarContent({
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
-          const Icon = item.icon;
+          const Icon     = item.icon;
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
 
           return (
@@ -115,8 +139,22 @@ function SidebarContent({
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="px-3 py-4 border-t border-slate-700 shrink-0">
+      {/* User identity + Logout */}
+      <div className="px-3 py-3 border-t border-slate-700 shrink-0 space-y-2">
+        {/* Avatar + name + role */}
+        <div className="flex items-center gap-3 px-2 py-2">
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+            style={{ backgroundColor: branding.buttonColor }}
+          >
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <p className="text-white text-sm font-semibold leading-tight truncate">{currentUser.fullName}</p>
+            <p className="text-slate-400 text-xs truncate">{roleLabel}</p>
+          </div>
+        </div>
+
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 text-slate-400 hover:bg-slate-800 hover:text-white"
@@ -135,14 +173,15 @@ interface SidebarProps {
   onMobileClose?: () => void;
   branding: Branding;
   visibleModules: AppModule[];
+  currentUser: CurrentUser;
 }
 
-export function Sidebar({ mobileOpen, onMobileClose, branding, visibleModules }: SidebarProps) {
+export function Sidebar({ mobileOpen, onMobileClose, branding, visibleModules, currentUser }: SidebarProps) {
   return (
     <>
       {/* Desktop sidebar — always visible on lg+ */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-slate-700 flex-col">
-        <SidebarContent branding={branding} visibleModules={visibleModules} />
+        <SidebarContent branding={branding} visibleModules={visibleModules} currentUser={currentUser} />
       </aside>
 
       {/* Mobile sidebar — slide in from left */}
@@ -153,7 +192,12 @@ export function Sidebar({ mobileOpen, onMobileClose, branding, visibleModules }:
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <SidebarContent onClose={onMobileClose} branding={branding} visibleModules={visibleModules} />
+        <SidebarContent
+          onClose={onMobileClose}
+          branding={branding}
+          visibleModules={visibleModules}
+          currentUser={currentUser}
+        />
       </aside>
     </>
   );
