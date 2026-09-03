@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, Edit2, Trash2, Loader2, Search, MoreHorizontal, Eye, Download, Printer, Share2 } from "lucide-react";
@@ -42,6 +43,8 @@ interface Payment {
   paymentType: string;
   paymentMethod: string;
   amountOriginal: unknown;
+  exchangeRateUsed: unknown;
+  amountXof: unknown;
   paymentReference: string | null;
   label: string | null;
   orderId: string;
@@ -373,7 +376,12 @@ export function PaiementsContent({ payments, orders, currencies }: {
                     {PAYMENT_METHODS.find((m) => m.value === payment.paymentMethod)?.label ?? payment.paymentMethod}
                   </TableCell>
                   <TableCell className="text-right font-medium text-green-600">
-                    {formatCurrency(Number(payment.amountOriginal))} {payment.currency.code}
+                    <CurrencyAmount
+                      amount={Number(payment.amountOriginal)}
+                      currencyCode={payment.currency.code}
+                      exchangeRateUsed={payment.exchangeRateUsed ? Number(payment.exchangeRateUsed) : null}
+                      amountXof={payment.amountXof ? Number(payment.amountXof) : null}
+                    />
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">

@@ -11,6 +11,7 @@ import { ArrowLeft, User, Calendar, CreditCard, Receipt, Edit2, Package, FileTex
 import { OrderStatusChanger } from "./order-status-changer";
 import { InvoiceButton } from "./invoice-button";
 import { OrderNotifications } from "./order-notifications";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   brouillon: { label: "Brouillon", color: "bg-gray-100 text-gray-700" },
@@ -210,7 +211,12 @@ export default async function CommandeDetailPage({ params }: { params: Promise<{
                         <TableCell className="text-sm">{formatDate(p.paymentDate)}</TableCell>
                         <TableCell className="text-sm capitalize">{p.paymentType.replace(/_/g, " ")}</TableCell>
                         <TableCell className="text-right font-medium text-green-600">
-                          {formatCurrency(Number(p.amountOriginal))} {p.currency.code}
+                          <CurrencyAmount
+                            amount={Number(p.amountOriginal)}
+                            currencyCode={p.currency.code}
+                            exchangeRateUsed={p.exchangeRateUsed ? Number(p.exchangeRateUsed) : null}
+                            amountXof={p.amountXof ? Number(p.amountXof) : null}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -249,7 +255,12 @@ export default async function CommandeDetailPage({ params }: { params: Promise<{
                         <TableCell className="text-sm">{e.label ?? e.category?.name ?? "—"}</TableCell>
                         <TableCell className="text-sm">{formatDate(e.expenseDate)}</TableCell>
                         <TableCell className="text-right font-medium text-orange-600">
-                          {formatCurrency(Number(e.amountOriginal))}
+                          <CurrencyAmount
+                            amount={Number(e.amountOriginal)}
+                            currencyCode={e.currency.code}
+                            exchangeRateUsed={e.exchangeRateUsed ? Number(e.exchangeRateUsed) : null}
+                            amountXof={e.amountXof ? Number(e.amountXof) : null}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -285,14 +296,24 @@ export default async function CommandeDetailPage({ params }: { params: Promise<{
                 </div>
               )}
               <Separator />
-              <div className="flex justify-between font-bold">
+              <div className="flex justify-between font-bold items-start">
                 <span>Total</span>
-                <span className="text-blue-700">{formatCurrency(Number(order.sellingPrice))} {order.currency.code}</span>
+                <div className="text-right">
+                  <CurrencyAmount
+                    amount={Number(order.sellingPrice)}
+                    currencyCode={order.currency.code}
+                    exchangeRateUsed={order.exchangeRateUsed ? Number(order.exchangeRateUsed) : null}
+                    amountXof={order.amountXof ? Number(order.amountXof) : null}
+                    amountUsd={order.amountUsd ? Number(order.amountUsd) : null}
+                    block
+                    className="text-blue-700"
+                  />
+                </div>
               </div>
               <Separator />
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Total payé</span>
-                <span className="font-semibold text-green-600">{formatCurrency(totalPaid)}</span>
+                <span className="font-semibold text-green-600">{formatCurrency(totalPaid)} {order.currency.code}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Solde dû</span>

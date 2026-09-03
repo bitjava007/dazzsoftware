@@ -13,11 +13,11 @@ export { ALL_MODULES, type AppModule, type ModulePerms, type UserPermissions };
 const FULL_ACCESS: ModulePerms = { canView: true, canCreate: true, canEdit: true, canDelete: true, canValidate: true, canCancel: true };
 const NO_ACCESS: ModulePerms = { canView: false, canCreate: false, canEdit: false, canDelete: false, canValidate: false, canCancel: false };
 
-// Roles that bypass the fine-grained permission table.
-export const UNRESTRICTED_ROLES = ["admin", "manager"] as const;
+// Only the Super Administrator bypasses the permission table entirely.
+export const UNRESTRICTED_ROLES = ["admin"] as const;
 
-// Roles whose access is driven by UserModulePermission rows.
-export const CONFIGURABLE_ROLES = ["accountant", "tailor", "user_basic"] as const;
+// Every other role (including manager) reads from UserModulePermission.
+export const CONFIGURABLE_ROLES = ["manager", "accountant", "tailor", "user_basic"] as const;
 
 function fullPermissions(): UserPermissions {
   return Object.fromEntries(ALL_MODULES.map((m) => [m, FULL_ACCESS])) as UserPermissions;

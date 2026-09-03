@@ -17,7 +17,7 @@ async function getProfile() {
 }
 
 async function requirePerm(userId: string, role: string, action: "canCreate" | "canValidate" | "canCancel") {
-  if (role === "admin" || role === "manager") return;
+  if (role === "admin") return;
   const perm = await prisma.userModulePermission.findUnique({
     where: { userId_module: { userId, module: "fournitures_ajustements" } },
     select: { [action]: true },

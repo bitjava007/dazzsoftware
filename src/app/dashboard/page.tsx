@@ -1,7 +1,11 @@
 import { Suspense } from "react";
 import { getDashboardStats, getCurrencies } from "@/actions/dashboard";
+import { getExchangeRateCheckData } from "@/actions/exchange-rate-check";
 import { DashboardContent } from "./dashboard-content";
+import { ExchangeRateCheckModal } from "@/components/dashboard/exchange-rate-check-modal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 
 export default async function DashboardPage({
   searchParams,
@@ -12,13 +16,31 @@ export default async function DashboardPage({
   const start = params.start;
   const end = params.end;
 
-  const [stats, currencies] = await Promise.all([
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const profile = user
+    ? await prisma.profile.findUnique({ where: { id: user.id }, select: { role: true } })
+    : null;
+  const isAdmin = profile?.role === "admin";
+
+  const [stats, currencies, rateCheck] = await Promise.all([
     getDashboardStats(start, end),
     getCurrencies(),
+    isAdmin ? getExchangeRateCheckData() : Promise.resolve(null),
   ]);
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
+      {/* Super Admin rate check — shown only to admin, only when rates differ */}
+      {isAdmin && rateCheck && (
+        <ExchangeRateCheckModal
+          storedRate={rateCheck.storedRate}
+          liveRate={rateCheck.liveRate}
+          liveSource={rateCheck.liveSource}
+          lastUpdatedAt={rateCheck.lastUpdatedAt}
+        />
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>

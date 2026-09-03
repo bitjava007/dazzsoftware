@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 
 const PAYMENT_TYPES = [
@@ -280,7 +281,12 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {formatCurrency(Number(expense.amountOriginal))} {expense.currency.code}
+                      <CurrencyAmount
+                        amount={Number(expense.amountOriginal)}
+                        currencyCode={expense.currency.code}
+                        exchangeRateUsed={expense.exchangeRateUsed ? Number(expense.exchangeRateUsed) : null}
+                        amountXof={expense.amountXof ? Number(expense.amountXof) : null}
+                      />
                     </TableCell>
                     <TableCell className="text-xs text-gray-500">
                       {expense.order ? expense.order.orderNumber : "—"}
