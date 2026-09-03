@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createExpenseAction, deleteExpenseAction } from "@/actions/expenses";
+import { createExpenseAction, deleteExpenseAction, validateExpenseAction, cancelExpenseAction } from "@/actions/expenses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
+import { Plus, Trash2, Loader2, CheckCircle, XCircle } from "lucide-react";
 
 const PAYMENT_TYPES = [
   { value: "cash", label: "Espèces" },
@@ -24,11 +25,16 @@ const PAYMENT_TYPES = [
   { value: "card", label: "Carte bancaire" },
 ];
 
-export function DepensesContent({ expenses, categories, orders, currencies }: {
+export function DepensesContent({ expenses, categories, orders, currencies, currentUserId, canCreate, canValidate, canCancel, canDelete }: {
   expenses: any[];
   categories: any[];
   orders: any[];
   currencies: any[];
+  currentUserId: string;
+  canCreate: boolean;
+  canValidate: boolean;
+  canCancel: boolean;
+  canDelete: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [startDate, setStartDate] = useState("");
@@ -91,6 +97,32 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
     });
   };
 
+  const handleValidate = (id: string) => {
+    if (!confirm("Valider cette dépense ?")) return;
+    startTransition(async () => {
+      const result = await validateExpenseAction(id);
+      if (result.error) {
+        toast({ title: "Erreur", description: result.error, variant: "destructive" });
+      } else {
+        toast({ title: "Dépense validée" });
+        router.refresh();
+      }
+    });
+  };
+
+  const handleCancel = (id: string) => {
+    if (!confirm("Annuler cette dépense ?")) return;
+    startTransition(async () => {
+      const result = await cancelExpenseAction(id);
+      if (result.error) {
+        toast({ title: "Erreur", description: result.error, variant: "destructive" });
+      } else {
+        toast({ title: "Dépense annulée" });
+        router.refresh();
+      }
+    });
+  };
+
   const filteredExpenses = expenses.filter((e) => {
     const matchCat = categoryFilter === "all" || e.category?.id === categoryFilter;
     const d = new Date(e.expenseDate);
@@ -128,6 +160,7 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
         <CardHeader className="pb-3 border-b space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-base">Liste des dépenses</CardTitle>
+            {canCreate && (
             <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
             <DialogTrigger asChild>
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
@@ -230,6 +263,7 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
               </form>
             </DialogContent>
           </Dialog>
+          )}
           </div>
           <div className="flex flex-col sm:flex-row flex-wrap gap-2">
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -259,13 +293,14 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
                 <TableHead>Commande</TableHead>
+                <TableHead>Statut</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredExpenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-gray-400">Aucune dépense trouvée</TableCell>
+                  <TableCell colSpan={9} className="text-center py-10 text-gray-400">Aucune dépense trouvée</TableCell>
                 </TableRow>
               ) : (
                 filteredExpenses.map((expense) => (
@@ -280,15 +315,45 @@ export function DepensesContent({ expenses, categories, orders, currencies }: {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {formatCurrency(Number(expense.amountOriginal))} {expense.currency.code}
+                      <CurrencyAmount
+                        amount={Number(expense.amountOriginal)}
+                        currencyCode={expense.currency.code}
+                        exchangeRateUsed={expense.exchangeRateUsed ? Number(expense.exchangeRateUsed) : null}
+                        amountXof={expense.amountXof ? Number(expense.amountXof) : null}
+                      />
                     </TableCell>
                     <TableCell className="text-xs text-gray-500">
                       {expense.order ? expense.order.orderNumber : "—"}
                     </TableCell>
+                    <TableCell>
+                      {expense.validationStatus === "pending_validation" && (
+                        <Badge variant="outline" className="text-xs border-yellow-400 text-yellow-700 bg-yellow-50">En attente</Badge>
+                      )}
+                      {expense.validationStatus === "validated" && (
+                        <Badge variant="outline" className="text-xs border-green-500 text-green-700 bg-green-50">Validée</Badge>
+                      )}
+                      {expense.validationStatus === "cancelled" && (
+                        <Badge variant="outline" className="text-xs border-red-400 text-red-700 bg-red-50">Annulée</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(expense.id)} disabled={isPending}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        {canValidate && expense.validationStatus === "pending_validation" && expense.createdById !== currentUserId && (
+                          <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-800" onClick={() => handleValidate(expense.id)} disabled={isPending} title="Valider">
+                            <CheckCircle className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {canCancel && expense.validationStatus === "pending_validation" && expense.createdById !== currentUserId && (
+                          <Button variant="ghost" size="sm" className="text-orange-500 hover:text-orange-700" onClick={() => handleCancel(expense.id)} disabled={isPending} title="Annuler">
+                            <XCircle className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(expense.id)} disabled={isPending} title="Supprimer">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

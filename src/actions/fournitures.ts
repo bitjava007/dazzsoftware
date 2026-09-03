@@ -18,7 +18,7 @@ async function requirePermission(action: "canCreate" | "canEdit" | "canDelete" |
   });
   if (!profile) throw new Error("Profil introuvable");
 
-  if (profile.role === "admin" || profile.role === "manager") return profile;
+  if (profile.role === "admin") return profile;
 
   const perm = await prisma.userModulePermission.findUnique({
     where: { userId_module: { userId: user.id, module: "fournitures" } }, // supplies list
@@ -120,7 +120,7 @@ export async function createLocation(formData: FormData) {
   if (!user) throw new Error("Non authentifié");
   const profile = await prisma.profile.findUnique({ where: { id: user.id }, select: { role: true, id: true } });
   if (!profile) throw new Error("Profil introuvable");
-  if (profile.role !== "admin" && profile.role !== "manager") {
+  if (profile.role !== "admin") {
     const perm = await prisma.userModulePermission.findUnique({
       where: { userId_module: { userId: user.id, module: "fournitures_emplacements" } },
     });

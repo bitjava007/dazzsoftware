@@ -6,13 +6,19 @@ import { Menu, Scissors } from "lucide-react";
 import type { Branding } from "@/lib/branding";
 import type { AppModule } from "@/lib/permissions-shared";
 
+interface CurrentUser {
+  fullName: string;
+  role: string;
+}
+
 interface AppShellProps {
   children: React.ReactNode;
   branding: Branding;
   visibleModules: AppModule[];
+  currentUser: CurrentUser;
 }
 
-export function AppShell({ children, branding, visibleModules }: AppShellProps) {
+export function AppShell({ children, branding, visibleModules, currentUser }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -31,6 +37,7 @@ export function AppShell({ children, branding, visibleModules }: AppShellProps) 
         onMobileClose={() => setMobileOpen(false)}
         branding={branding}
         visibleModules={visibleModules}
+        currentUser={currentUser}
       />
 
       <div className="flex flex-col flex-1 lg:ml-64 min-h-screen overflow-hidden">

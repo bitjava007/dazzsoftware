@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 import {
   Send, FileText, Download, Loader2, Plus, XCircle, Printer, Eye,
 } from "lucide-react";
@@ -56,6 +57,7 @@ interface Invoice {
   amountPaid: unknown;
   balanceDue: unknown;
   notes: string | null;
+  exchangeRateUsed: unknown;
   client: { id: string; fullName: string };
   order: { orderNumber: string; currency: { code: string } } | null;
   items: InvoiceItem[];
@@ -400,7 +402,11 @@ export function FacturesContent({
                     </TableCell>
                     <TableCell className="text-sm">{formatDate(invoice.issueDate)}</TableCell>
                     <TableCell className="text-right font-medium text-sm">
-                      {formatCurrency(Number(invoice.totalAmount))} {currCode(invoice)}
+                      <CurrencyAmount
+                        amount={Number(invoice.totalAmount)}
+                        currencyCode={currCode(invoice) || "XOF"}
+                        exchangeRateUsed={invoice.exchangeRateUsed ? Number(invoice.exchangeRateUsed) : null}
+                      />
                     </TableCell>
                     <TableCell className="text-right hidden md:table-cell text-green-600 text-sm">
                       {formatCurrency(Number(invoice.amountPaid))}

@@ -66,7 +66,8 @@ model Profile {
   stockExitsValidated      StockExit[]     @relation("ExitValidatedBy")
   stockTransfersCreated    StockTransfer[] @relation("TransferCreatedBy")
   stockTransfersValidated  StockTransfer[] @relation("TransferValidatedBy")
-  stockAdjustments         StockAdjustment[]
+  stockAdjustments          StockAdjustment[] @relation("AdjustmentCreatedBy")
+  stockAdjustmentsValidated StockAdjustment[] @relation("AdjustmentValidatedBy")
   inventorySessionsCreated   InventorySession[] @relation("InventoryCreatedBy")
   inventorySessionsValidated InventorySession[] @relation("InventoryValidatedBy")
 
@@ -87,14 +88,16 @@ enum Role {
 // Fine-grained per-user access control for roles accountant/tailor/user_basic.
 // admin and manager always have full access and are never stored here.
 model UserModulePermission {
-  id        String    @id @default(uuid())
-  userId    String    @map("user_id")
-  module    AppModule
-  canView   Boolean   @default(false) @map("can_view")
-  canCreate Boolean   @default(false) @map("can_create")
-  canEdit   Boolean   @default(false) @map("can_edit")
-  canDelete Boolean   @default(false) @map("can_delete")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  module      AppModule
+  canView     Boolean   @default(false) @map("can_view")
+  canCreate   Boolean   @default(false) @map("can_create")
+  canEdit     Boolean   @default(false) @map("can_edit")
+  canDelete   Boolean   @default(false) @map("can_delete")
+  canValidate Boolean   @default(false) @map("can_validate")
+  canCancel   Boolean   @default(false) @map("can_cancel")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -466,6 +469,10 @@ model Expense {
   createdById       String?     @map("created_by")
   updatedById       String?     @map("updated_by")
   deletedById       String?     @map("deleted_by")
+  validationStatus  String      @default("validated") @map("validation_status")
+  validatedById     String?     @map("validated_by_id")
+  validatedByName   String?     @map("validated_by_name")
+  validatedAt       DateTime?   @map("validated_at")
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
   deletedAt         DateTime?   @map("deleted_at")
@@ -512,6 +519,10 @@ model OrderPayment {
   createdById      String?          @map("created_by")
   updatedById      String?          @map("updated_by")
   deletedById      String?          @map("deleted_by")
+  validationStatus String           @default("validated") @map("validation_status")
+  validatedById    String?          @map("validated_by_id")
+  validatedByName  String?          @map("validated_by_name")
+  validatedAt      DateTime?        @map("validated_at")
   createdAt        DateTime         @default(now()) @map("created_at")
   updatedAt        DateTime         @updatedAt @map("updated_at")
   deletedAt        DateTime?        @map("deleted_at")
@@ -1032,18 +1043,30 @@ enum AdjustmentReason {
   @@map("adjustment_reason")
 }
 
-model StockAdjustment {
-  id          String           @id @default(uuid())
-  reference   String           @unique
-  date        DateTime
-  reason      AdjustmentReason
-  comment     String?
-  createdById String?          @map("created_by")
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
+enum AdjustmentStatus {
+  draft
+  validated
+  cancelled
 
-  createdBy Profile?              @relation(fields: [createdById], references: [id])
-  lines     StockAdjustmentLine[]
+  @@map("adjustment_status")
+}
+
+model StockAdjustment {
+  id              String           @id @default(uuid())
+  reference       String           @unique
+  date            DateTime
+  reason          AdjustmentReason
+  comment         String?
+  status          AdjustmentStatus @default(draft)
+  createdById     String?          @map("created_by")
+  validatedById   String?          @map("validated_by")
+  validatedAt     DateTime?        @map("validated_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  createdBy   Profile?              @relation("AdjustmentCreatedBy", fields: [createdById], references: [id])
+  validatedBy Profile?              @relation("AdjustmentValidatedBy", fields: [validatedById], references: [id])
+  lines       StockAdjustmentLine[]
 
   @@map("stock_adjustments")
 }

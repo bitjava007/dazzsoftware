@@ -4,13 +4,21 @@ import { getMyPermissions } from "@/lib/permissions";
 import { ALL_MODULES, FOURNITURES_MODULES, type AppModule } from "@/lib/permissions-shared";
 import { AppShell } from "@/components/layout/app-shell";
 import { getBranding } from "@/lib/branding";
+import { prisma } from "@/lib/prisma";
 
 export async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/connexion");
 
-  const [branding, perms] = await Promise.all([getBranding(), getMyPermissions()]);
+  const [branding, perms, profile] = await Promise.all([
+    getBranding(),
+    getMyPermissions(),
+    prisma.profile.findUnique({
+      where:  { id: user.id },
+      select: { fullName: true, role: true },
+    }),
+  ]);
 
   const visibleModules = ALL_MODULES.filter((m: AppModule) => perms[m].canView);
 
@@ -22,5 +30,14 @@ export async function ProtectedLayout({ children }: { children: React.ReactNode 
       ? (["fournitures", ...visibleModules] as AppModule[])
       : visibleModules;
 
-  return <AppShell branding={branding} visibleModules={effectiveModules}>{children}</AppShell>;
+  const currentUser = {
+    fullName: profile?.fullName ?? "Utilisateur",
+    role:     profile?.role    ?? "user_basic",
+  };
+
+  return (
+    <AppShell branding={branding} visibleModules={effectiveModules} currentUser={currentUser}>
+      {children}
+    </AppShell>
+  );
 }

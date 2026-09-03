@@ -10,14 +10,14 @@ import {
 
 export { ALL_MODULES, type AppModule, type ModulePerms, type UserPermissions };
 
-const FULL_ACCESS: ModulePerms = { canView: true, canCreate: true, canEdit: true, canDelete: true };
-const NO_ACCESS: ModulePerms = { canView: false, canCreate: false, canEdit: false, canDelete: false };
+const FULL_ACCESS: ModulePerms = { canView: true, canCreate: true, canEdit: true, canDelete: true, canValidate: true, canCancel: true };
+const NO_ACCESS: ModulePerms = { canView: false, canCreate: false, canEdit: false, canDelete: false, canValidate: false, canCancel: false };
 
-// Roles that bypass the fine-grained permission table.
-export const UNRESTRICTED_ROLES = ["admin", "manager"] as const;
+// Only the Super Administrator bypasses the permission table entirely.
+export const UNRESTRICTED_ROLES = ["admin"] as const;
 
-// Roles whose access is driven by UserModulePermission rows.
-export const CONFIGURABLE_ROLES = ["accountant", "tailor", "user_basic"] as const;
+// Every other role (including manager) reads from UserModulePermission.
+export const CONFIGURABLE_ROLES = ["manager", "accountant", "tailor", "user_basic"] as const;
 
 function fullPermissions(): UserPermissions {
   return Object.fromEntries(ALL_MODULES.map((m) => [m, FULL_ACCESS])) as UserPermissions;
@@ -49,7 +49,7 @@ export const getMyPermissions = cache(async (): Promise<UserPermissions> => {
 
   const rows = await prisma.userModulePermission.findMany({
     where: { userId: user.id },
-    select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true },
+    select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true, canValidate: true, canCancel: true },
   });
 
   const perms = emptyPermissions();
@@ -57,10 +57,12 @@ export const getMyPermissions = cache(async (): Promise<UserPermissions> => {
     const mod = row.module as AppModule;
     if (mod in perms) {
       perms[mod] = {
-        canView: row.canView,
-        canCreate: row.canCreate,
-        canEdit: row.canEdit,
-        canDelete: row.canDelete,
+        canView:     row.canView,
+        canCreate:   row.canCreate,
+        canEdit:     row.canEdit,
+        canDelete:   row.canDelete,
+        canValidate: row.canValidate,
+        canCancel:   row.canCancel,
       };
     }
   }
@@ -83,7 +85,7 @@ export async function getUserPermissions(userId: string): Promise<UserPermission
 
   const rows = await prisma.userModulePermission.findMany({
     where: { userId },
-    select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true },
+    select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true, canValidate: true, canCancel: true },
   });
 
   const perms = emptyPermissions();
@@ -91,10 +93,12 @@ export async function getUserPermissions(userId: string): Promise<UserPermission
     const mod = row.module as AppModule;
     if (mod in perms) {
       perms[mod] = {
-        canView: row.canView,
-        canCreate: row.canCreate,
-        canEdit: row.canEdit,
-        canDelete: row.canDelete,
+        canView:     row.canView,
+        canCreate:   row.canCreate,
+        canEdit:     row.canEdit,
+        canDelete:   row.canDelete,
+        canValidate: row.canValidate,
+        canCancel:   row.canCancel,
       };
     }
   }
