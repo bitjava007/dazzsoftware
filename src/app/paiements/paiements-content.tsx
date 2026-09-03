@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createPaymentAction, updatePaymentAction, deletePaymentAction } from "@/actions/payments";
+import { createPaymentAction, updatePaymentAction, deletePaymentAction, validatePaymentAction, cancelPaymentAction } from "@/actions/payments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +16,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Edit2, Trash2, Loader2, Search, MoreHorizontal, Eye, Download, Printer, Share2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2, Search, MoreHorizontal, Eye, Download, Printer, Share2, CheckCircle, XCircle } from "lucide-react";
 
 const PAYMENT_TYPES = [
   { value: "acompte_initial", label: "Acompte initial" },
@@ -49,6 +49,8 @@ interface Payment {
   label: string | null;
   orderId: string;
   currencyId: string;
+  createdById: string | null;
+  validationStatus: string;
   order: { orderNumber: string; client: { fullName: string } };
   currency: { code: string };
 }
@@ -158,10 +160,15 @@ function PaymentForm({
   );
 }
 
-export function PaiementsContent({ payments, orders, currencies }: {
+export function PaiementsContent({ payments, orders, currencies, currentUserId, canCreate, canValidate, canCancel, canDelete }: {
   payments: Payment[];
   orders: any[];
   currencies: any[];
+  currentUserId: string;
+  canCreate: boolean;
+  canValidate: boolean;
+  canCancel: boolean;
+  canDelete: boolean;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
@@ -216,6 +223,32 @@ export function PaiementsContent({ payments, orders, currencies }: {
         toast({ title: "Erreur", description: result.error, variant: "destructive" });
       } else {
         toast({ title: "Paiement supprimé" });
+        router.refresh();
+      }
+    });
+  };
+
+  const handleValidatePayment = (id: string) => {
+    if (!confirm("Valider ce paiement ?")) return;
+    startTransition(async () => {
+      const result = await validatePaymentAction(id);
+      if (result.error) {
+        toast({ title: "Erreur", description: result.error, variant: "destructive" });
+      } else {
+        toast({ title: "Paiement validé" });
+        router.refresh();
+      }
+    });
+  };
+
+  const handleCancelPayment = (id: string) => {
+    if (!confirm("Annuler ce paiement ?")) return;
+    startTransition(async () => {
+      const result = await cancelPaymentAction(id);
+      if (result.error) {
+        toast({ title: "Erreur", description: result.error, variant: "destructive" });
+      } else {
+        toast({ title: "Paiement annulé" });
         router.refresh();
       }
     });
@@ -307,6 +340,7 @@ export function PaiementsContent({ payments, orders, currencies }: {
         <CardHeader className="pb-3 border-b space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-base">Historique des paiements</CardTitle>
+            {canCreate && (
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
@@ -320,6 +354,7 @@ export function PaiementsContent({ payments, orders, currencies }: {
               <PaymentForm orders={orders} currencies={currencies} onSubmit={handleCreate} onCancel={() => setCreateOpen(false)} isPending={isPending} />
             </DialogContent>
           </Dialog>
+            )}
           </div>
           <div className="flex flex-col sm:flex-row flex-wrap gap-2">
             <div className="relative flex-1 min-w-[180px]">
@@ -353,13 +388,14 @@ export function PaiementsContent({ payments, orders, currencies }: {
                 <TableHead>Type</TableHead>
                 <TableHead className="hidden lg:table-cell">Méthode</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
+                <TableHead>Statut</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-gray-400">Aucun paiement trouvé</TableCell>
+                  <TableCell colSpan={9} className="text-center py-10 text-gray-400">Aucun paiement trouvé</TableCell>
                 </TableRow>
               ) : filtered.map((payment) => (
                 <TableRow key={payment.id}>
@@ -383,8 +419,29 @@ export function PaiementsContent({ payments, orders, currencies }: {
                       amountXof={payment.amountXof ? Number(payment.amountXof) : null}
                     />
                   </TableCell>
+                  <TableCell>
+                    {payment.validationStatus === "pending_validation" && (
+                      <Badge variant="outline" className="text-xs border-yellow-400 text-yellow-700 bg-yellow-50">En attente</Badge>
+                    )}
+                    {payment.validationStatus === "validated" && (
+                      <Badge variant="outline" className="text-xs border-green-500 text-green-700 bg-green-50">Validé</Badge>
+                    )}
+                    {payment.validationStatus === "cancelled" && (
+                      <Badge variant="outline" className="text-xs border-red-400 text-red-700 bg-red-50">Annulé</Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      {canValidate && payment.validationStatus === "pending_validation" && payment.createdById !== currentUserId && currentUserId !== "" && (
+                        <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-800" onClick={() => handleValidatePayment(payment.id)} disabled={isPending} title="Valider">
+                          <CheckCircle className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {canCancel && payment.validationStatus === "pending_validation" && payment.createdById !== currentUserId && currentUserId !== "" && (
+                        <Button variant="ghost" size="sm" className="text-orange-500 hover:text-orange-700" onClick={() => handleCancelPayment(payment.id)} disabled={isPending} title="Annuler">
+                          <XCircle className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" onClick={() => setEditingPayment(payment)}>
                         <Edit2 className="w-4 h-4" />
                       </Button>
@@ -409,10 +466,14 @@ export function PaiementsContent({ payments, orders, currencies }: {
                           <DropdownMenuItem onClick={() => handleShare(payment.id, payment.receiptNumber)}>
                             <Share2 className="w-4 h-4 mr-2" />Partager
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(payment.id)}>
-                            <Trash2 className="w-4 h-4 mr-2" />Supprimer
-                          </DropdownMenuItem>
+                          {canDelete && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(payment.id)}>
+                                <Trash2 className="w-4 h-4 mr-2" />Supprimer
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>

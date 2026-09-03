@@ -126,13 +126,35 @@ export async function issueInvoiceAction(id: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
 
+  const profile = await prisma.profile.findUnique({
+    where: { id: user.id },
+    select: { id: true, role: true, fullName: true },
+  });
+  if (!profile) return { error: "Profil introuvable" };
+
+  // Check canValidate permission for factures module
+  if (profile.role !== "admin") {
+    const perm = await prisma.userModulePermission.findUnique({
+      where: { userId_module: { userId: user.id, module: "factures" } },
+      select: { canValidate: true },
+    });
+    if (!perm?.canValidate) return { error: "Permission insuffisante pour émettre une facture" };
+  }
+
+  // Maker-checker: non-admin cannot issue their own invoice
+  const invoice = await prisma.invoice.findUnique({ where: { id }, select: { createdById: true } });
+  if (!invoice) return { error: "Facture introuvable" };
+  if (profile.role !== "admin" && invoice.createdById === profile.id) {
+    return { error: "Vous ne pouvez pas émettre votre propre facture (principe de séparation des responsabilités)" };
+  }
+
   try {
-    const invoice = await prisma.invoice.update({
+    const updated = await prisma.invoice.update({
       where: { id },
       data: { status: InvoiceStatus.issued, updatedById: user.id },
     });
     revalidatePath("/factures");
-    return { success: true, invoice };
+    return { success: true, invoice: updated };
   } catch (error) {
     console.error(error);
     return { error: "Erreur lors de l'émission" };

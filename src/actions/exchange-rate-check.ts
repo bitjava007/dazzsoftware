@@ -22,7 +22,7 @@ async function fetchLiveUsdXofRate(): Promise<{ rate: number; source: string } |
     const data = await res.json();
     const xofRate = data?.rates?.XOF;
     if (!xofRate || typeof xofRate !== "number") return null;
-    return { rate: Math.round(xofRate), source: "open.er-api.com (Banque mondiale)" };
+    return { rate: Math.round(xofRate), source: "ExchangeRate-API (open.er-api.com)" };
   } catch {
     return null;
   }

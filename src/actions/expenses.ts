@@ -21,10 +21,32 @@ const expenseSchema = z.object({
   details: z.string().optional(),
 });
 
-export async function createExpenseAction(formData: FormData) {
+async function getAuthProfile() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  if (!user) return null;
+  const profile = await prisma.profile.findUnique({
+    where: { id: user.id },
+    select: { id: true, role: true, fullName: true },
+  });
+  return profile ? { ...profile, userId: user.id } : null;
+}
+
+async function checkPerm(userId: string, role: string, action: "canCreate" | "canValidate" | "canCancel" | "canDelete") {
+  if (role === "admin") return true;
+  const perm = await prisma.userModulePermission.findUnique({
+    where: { userId_module: { userId, module: "depenses" } },
+    select: { [action]: true },
+  });
+  return !!(perm as Record<string, boolean> | null)?.[action];
+}
+
+export async function createExpenseAction(formData: FormData) {
+  const profile = await getAuthProfile();
+  if (!profile) return { error: "Non authentifié" };
+
+  const hasCreate = await checkPerm(profile.id, profile.role, "canCreate");
+  if (!hasCreate) return { error: "Permission insuffisante pour créer une dépense" };
 
   const linkedToOrderRaw = formData.get("linkedToOrder");
   const parsed = expenseSchema.safeParse({
@@ -40,13 +62,12 @@ export async function createExpenseAction(formData: FormData) {
     label: formData.get("label") || undefined,
     details: formData.get("details") || undefined,
   });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0].message };
-  }
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
     const expenseNumber = generateExpenseNumber();
+    // Admin auto-validates their own expense; others create as pending
+    const isAdmin = profile.role === "admin";
 
     const expense = await prisma.expense.create({
       data: {
@@ -62,13 +83,17 @@ export async function createExpenseAction(formData: FormData) {
         currencyId: parsed.data.currencyId,
         label: parsed.data.label || null,
         details: parsed.data.details || null,
-        createdById: user.id,
-        updatedById: user.id,
+        createdById: profile.id,
+        updatedById: profile.id,
+        validationStatus: isAdmin ? "validated" : "pending_validation",
+        validatedById:   isAdmin ? profile.id        : null,
+        validatedByName: isAdmin ? profile.fullName  : null,
+        validatedAt:     isAdmin ? new Date()        : null,
       },
     });
 
     await createAuditLog({
-      userId: user.id,
+      userId: profile.id,
       tableName: "expenses",
       recordId: expense.id,
       action: "create",
@@ -84,17 +109,80 @@ export async function createExpenseAction(formData: FormData) {
   }
 }
 
+export async function validateExpenseAction(id: string) {
+  const profile = await getAuthProfile();
+  if (!profile) return { error: "Non authentifié" };
+
+  const hasValidate = await checkPerm(profile.id, profile.role, "canValidate");
+  if (!hasValidate) return { error: "Permission insuffisante pour valider une dépense" };
+
+  const expense = await prisma.expense.findUnique({ where: { id }, select: { id: true, createdById: true, validationStatus: true } });
+  if (!expense) return { error: "Dépense introuvable" };
+  if (expense.validationStatus !== "pending_validation") return { error: "Cette dépense n'est pas en attente de validation" };
+
+  // Maker-checker: non-admin cannot validate their own expense
+  if (profile.role !== "admin" && expense.createdById === profile.id) {
+    return { error: "Vous ne pouvez pas valider votre propre dépense (principe de séparation des responsabilités)" };
+  }
+
+  await prisma.expense.update({
+    where: { id },
+    data: {
+      validationStatus: "validated",
+      validatedById:   profile.id,
+      validatedByName: profile.fullName,
+      validatedAt:     new Date(),
+      updatedById:     profile.id,
+    },
+  });
+
+  revalidatePath("/depenses");
+  return { success: true };
+}
+
+export async function cancelExpenseAction(id: string) {
+  const profile = await getAuthProfile();
+  if (!profile) return { error: "Non authentifié" };
+
+  const hasCancel = await checkPerm(profile.id, profile.role, "canCancel");
+  if (!hasCancel) return { error: "Permission insuffisante pour annuler une dépense" };
+
+  const expense = await prisma.expense.findUnique({ where: { id }, select: { id: true, createdById: true, validationStatus: true } });
+  if (!expense) return { error: "Dépense introuvable" };
+  if (expense.validationStatus !== "pending_validation") return { error: "Seules les dépenses en attente peuvent être annulées" };
+
+  // Maker-checker
+  if (profile.role !== "admin" && expense.createdById === profile.id) {
+    return { error: "Vous ne pouvez pas annuler votre propre dépense (principe de séparation des responsabilités)" };
+  }
+
+  await prisma.expense.update({
+    where: { id },
+    data: {
+      validationStatus: "cancelled",
+      validatedById:   profile.id,
+      validatedByName: profile.fullName,
+      validatedAt:     new Date(),
+      updatedById:     profile.id,
+    },
+  });
+
+  revalidatePath("/depenses");
+  return { success: true };
+}
+
 export async function deleteExpenseAction(id: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  const profile = await getAuthProfile();
+  if (!profile) return { error: "Non authentifié" };
+
+  const hasDelete = await checkPerm(profile.id, profile.role, "canDelete");
+  if (!hasDelete) return { error: "Permission insuffisante pour supprimer une dépense" };
 
   try {
     await prisma.expense.update({
       where: { id },
-      data: { deletedAt: new Date(), deletedById: user.id },
+      data: { deletedAt: new Date(), deletedById: profile.id },
     });
-
     revalidatePath("/depenses");
     return { success: true };
   } catch (error) {
